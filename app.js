@@ -1,438 +1,542 @@
-const $ = (s) => document.querySelector(s);
-const STORE_KEY = "NEXUS_POS_HISTORY_V3";
+/* =========================================================
+   Nexus POS — app.js (PWA + Firestore + Ticket jsPDF)
+   ========================================================= */
 
+/* ====== CONFIG ====== */
 const CONFIG = {
-  business: {
-    name: "Nexus POS",
-    phone: "787-664-3079",
-    address: "Puerto Rico",
-    receiptTitle: "RECIBO DE PAGO",
-    ticket: { widthPt: 227, marginPt: 14, lineHeight: 12, fontSize: 10, footer: "Gracias por su pago." }
-  },
+  brand: "Nexus POS",
+  phone: "787-664-3079",
+  location: "Puerto Rico",
   currency: "USD",
+
+  // QR/Link por método (editable)
   methods: [
-    { id:"stripe", name:"Stripe", desc:"Escanear QR", iconImg:"assets/icons/stripe.png", action:"qr", qrImage:"assets/stripe-qr.png",
-      bg:"linear-gradient(135deg, rgba(140,92,255,.65), rgba(0,0,0,.25))" },
-
-    { id:"ath", name:"ATH Móvil", desc:"Escanear QR", iconImg:"assets/icons/ath.png", action:"qr", qrImage:"assets/ath-qr.png",
-      bg:"linear-gradient(135deg, rgba(255,153,0,.55), rgba(0,0,0,.25))" },
-
-    { id:"tap", name:"Tap to Pay", desc:"iPhone (link)", iconImg:"assets/icons/tap.png", action:"link", link:"https://example.com/tap",
-      bg:"linear-gradient(135deg, rgba(47,122,246,.55), rgba(0,0,0,.25))" },
-
-    { id:"cash", name:"Cash", desc:"Efectivo", iconImg:"assets/icons/cash.png", action:"none",
-      bg:"linear-gradient(135deg, rgba(40,199,111,.50), rgba(0,0,0,.25))" },
-
-    { id:"check", name:"Checks", desc:"Cheque", iconImg:"assets/icons/checks.png", action:"none",
-      bg:"linear-gradient(135deg, rgba(214,178,94,.48), rgba(0,0,0,.25))" }
+    {
+      id: "stripe",
+      title: "Stripe",
+      subtitle: "Escanear QR",
+      iconImg: "assets/icons/stripe.png",
+      kind: "qr",
+      qrImg: "assets/stripe-qr.png",
+      linkUrl: "" // opcional si quieres abrir link
+    },
+    {
+      id: "ath",
+      title: "ATH Móvil",
+      subtitle: "Escanear QR",
+      iconImg: "assets/icons/ath.png",
+      kind: "qr",
+      qrImg: "assets/ath-qr.png",
+      linkUrl: ""
+    },
+    {
+      id: "tap",
+      title: "Tap to Pay",
+      subtitle: "iPhone (link)",
+      iconImg: "assets/icons/tap.png",
+      kind: "link",
+      linkUrl: "" // pon tu link real si tienes
+    },
+    {
+      id: "cash",
+      title: "Cash",
+      subtitle: "Efectivo",
+      iconImg: "assets/icons/cash.png",
+      kind: "manual"
+    },
+    {
+      id: "checks",
+      title: "Checks",
+      subtitle: "Cheque",
+      iconImg: "assets/icons/checks.png",
+      kind: "manual"
+    }
   ]
 };
 
-const state = {
-  history: loadHistory(),
-  selectedMethod: null,
-  draft: null
+/* ====== STORAGE ====== */
+const LS_KEY = "nexuspos_payments_v1";
+
+/* ====== FIREBASE (PEGA TU CONFIG REAL) ====== */
+const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_DOMAIN",
+  projectId: "TU_PROJECT_ID",
+  storageBucket: "TU_BUCKET",
+  messagingSenderId: "TU_SENDER_ID",
+  appId: "TU_APP_ID"
 };
 
-renderMethods();
-bindUI();
-renderHistoryTable();
+let db = null;
+let unsubscribeCloud = null;
 
-/* ================= UI ================= */
-function bindUI(){
-  $("#btnBack").addEventListener("click", gotoMethods);
-  $("#btnSave").addEventListener("click", saveDraft);
-  $("#btnPayLink").addEventListener("click", openSelectedPay);
-  $("#btnPaid").addEventListener("click", markPaidAndTicket);
-
-  $("#btnHistory").addEventListener("click", openHistory);
-  $("#btnCloseModal").addEventListener("click", closeHistory);
-  $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeHistory(); });
-
-  $("#btnCloseQR").addEventListener("click", closeQR);
-  $("#qrModal").addEventListener("click", (e) => { if (e.target.id === "qrModal") closeQR(); });
-
-  $("#btnExportJSON").addEventListener("click", exportJSON);
-  $("#btnExportCSV").addEventListener("click", exportCSV);
-  $("#btnClear").addEventListener("click", clearAll);
-
-  ["fName","fPhone","fAmount","fNote"].forEach(id=>{
-    $("#"+id).addEventListener("keydown",(e)=>{ if(e.key==="Enter") saveDraft(); });
-  });
+try{
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  console.log("Firebase listo ✅");
+}catch(e){
+  console.warn("Firebase no inicializado (usando local):", e);
 }
 
-/* ================= NAV ================= */
-function gotoRegister(method){
-  state.selectedMethod = method;
-  $("#methodBadge").textContent = `Método: ${method.name}`;
+/* ====== HELPERS ====== */
+const $ = (id) => document.getElementById(id);
+const fmtMoney = (n) => {
+  const v = Number(n || 0);
+  return v.toLocaleString("en-US", { style:"currency", currency: CONFIG.currency });
+};
+const nowISO = () => new Date().toISOString();
 
-  state.draft = null;
-  $("#fName").value = "";
-  $("#fPhone").value = "";
-  $("#fAmount").value = "";
-  $("#fNote").value = "";
-  $("#regHint").textContent = "Flujo: Guardar → Ir a pagar → Pago completado (manual) → Ticket.";
-
-  $("#screenMethods").classList.add("hidden");
-  $("#screenRegister").classList.remove("hidden");
-  window.scrollTo({top:0, behavior:"smooth"});
+function makeReceiptId(){
+  // R-YYYYMMDD-HHMMSS-XXXX
+  const d = new Date();
+  const pad = (x) => String(x).padStart(2,"0");
+  const y = d.getFullYear();
+  const m = pad(d.getMonth()+1);
+  const day = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mm = pad(d.getMinutes());
+  const ss = pad(d.getSeconds());
+  const rnd = Math.random().toString(16).slice(2,6).toUpperCase();
+  return `R-${y}${m}${day}-${hh}${mm}${ss}-${rnd}`;
 }
-function gotoMethods(){
-  $("#screenRegister").classList.add("hidden");
-  $("#screenMethods").classList.remove("hidden");
-  window.scrollTo({top:0, behavior:"smooth"});
+
+/* ====== LOCAL PAYMENTS ====== */
+function localGet(){
+  return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
+}
+function localSet(arr){
+  localStorage.setItem(LS_KEY, JSON.stringify(arr));
+}
+function localAdd(payment){
+  const arr = localGet();
+  arr.unshift(payment);
+  localSet(arr);
 }
 
-/* ================= METHODS GRID ================= */
+/* ====== CLOUD SAVE ====== */
+async function saveToCloud(payment){
+  if(!db) return { ok:false, where:"local" };
+  try{
+    const docRef = await db.collection("payments").add({
+      ...payment,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    return { ok:true, where:"cloud", id: docRef.id };
+  }catch(e){
+    console.warn("Cloud save fail -> local only", e);
+    return { ok:false, where:"local" };
+  }
+}
+
+/* ====== SYNC LOCAL -> CLOUD ====== */
+async function syncLocalToCloud(){
+  if(!db) return { ok:false, msg:"Firebase no está listo." };
+
+  const arr = localGet();
+  const pending = arr.filter(x => x && x._cloud !== true);
+
+  if(pending.length === 0) return { ok:true, msg:"Nada pendiente." };
+
+  let okCount = 0;
+  for(const p of pending){
+    const res = await saveToCloud(p);
+    if(res.ok){
+      okCount++;
+      // marca como subido
+      p._cloud = true;
+      p._cloudId = res.id || null;
+    }
+  }
+
+  // guardar cambios en local
+  localSet(arr);
+
+  return { ok:true, msg:`Sincronizado: ${okCount}/${pending.length}` };
+}
+
+/* ====== CLOUD LISTEN ====== */
+function startCloudListener(onData){
+  if(!db) return;
+  if(unsubscribeCloud) unsubscribeCloud();
+
+  unsubscribeCloud = db.collection("payments")
+    .orderBy("createdAt","desc")
+    .limit(300)
+    .onSnapshot((snap) => {
+      const cloud = [];
+      snap.forEach(doc => {
+        const d = doc.data();
+        cloud.push({ ...d, _cloud:true, _cloudId: doc.id });
+      });
+      onData(cloud);
+    }, (err) => {
+      console.warn("Listener error:", err);
+    });
+}
+
+/* ====== UI STATE ====== */
+let selectedMethod = null;
+let lastPayment = null;
+let cloudCache = []; // data nube
+
+/* ====== RENDER METHODS ====== */
 function renderMethods(){
-  const grid = $("#methodsGrid");
+  const grid = $("methodsGrid");
   grid.innerHTML = "";
 
-  CONFIG.methods.forEach(m => {
+  CONFIG.methods.forEach((m) => {
     const btn = document.createElement("button");
     btn.className = "tileBtn";
     btn.type = "button";
-    btn.style.background = m.bg;
 
     btn.innerHTML = `
-      <div class="tileTopGlow"></div>
       <div class="tileInner">
         <div class="tileLogoWrap">
-          <img class="tileLogo" src="${m.iconImg}" alt="${escapeHTML(m.name)}" onerror="this.style.display='none'">
+          <img class="tileLogo" src="${m.iconImg}" alt="${m.title}">
         </div>
         <div class="tileText">
-          <div class="tileTitle">${escapeHTML(m.name)}</div>
-          <div class="tileSmall">${escapeHTML(m.desc || "")}</div>
+          <div class="tileTitle">${m.title}</div>
+          <div class="tileSmall">${m.subtitle}</div>
         </div>
       </div>
     `;
 
-    btn.addEventListener("click", () => gotoRegister(m));
+    btn.addEventListener("click", () => {
+      selectedMethod = m;
+      openRegister();
+    });
+
     grid.appendChild(btn);
   });
 }
 
-/* ================= FLOW ================= */
-function saveDraft(){
-  const method = state.selectedMethod;
-  if (!method) return toast("No hay método seleccionado.");
+/* ====== NAV ====== */
+function show(el){ el.classList.remove("hidden"); }
+function hide(el){ el.classList.add("hidden"); }
 
-  const name = ($("#fName").value || "").trim();
-  const phone = ($("#fPhone").value || "").trim();
-  const amount = parseMoney($("#fAmount").value);
-  const note = ($("#fNote").value || "").trim();
-
-  if (!name) return toast("Falta el nombre.");
-  if (!phone) return toast("Falta el teléfono.");
-  if (!(amount > 0)) return toast("Cantidad inválida.");
-
-  state.draft = {
-    id: cryptoId(),
-    createdAt: Date.now(),
-    status: "PENDING",
-    methodId: method.id,
-    methodName: method.name,
-    methodAction: method.action || "link",
-    methodLink: method.link || "",
-    methodQrImage: method.qrImage || "",
-    name, phone, amount, note,
-    paidAt: null,
-    receiptNo: null
-  };
-
-  $("#regHint").textContent = "Guardado ✅ Ahora: Ir a pagar → luego Pago completado (manual) para ticket.";
-  toast("Guardado ✅");
+function openRegister(){
+  hide($("screenMethods"));
+  show($("screenRegister"));
+  $("methodBadge").textContent = `Método: ${selectedMethod?.title || "-"}`;
+  $("statusHint").textContent = "Listo.";
+  $("payForm").reset();
+  $("fAmount").value = "75.00";
+  lastPayment = null;
 }
 
-function openSelectedPay(){
-  const method = state.selectedMethod;
-  if (!method) return toast("No hay método seleccionado.");
+function backToMethods(){
+  hide($("screenRegister"));
+  show($("screenMethods"));
+  lastPayment = null;
+}
 
-  if (!state.draft) toast("Abriendo pago. Mejor guarda primero para historial.");
-
-  const action = method.action || "link";
-
-  if (action === "qr") {
-    if (!method.qrImage) return toast("Falta qrImage en CONFIG.");
-    openQR(method.name, method.qrImage, method.desc || "Escanee el código QR.");
+/* ====== QR MODAL ====== */
+function openQR(method){
+  if(method.kind === "link" && method.linkUrl){
+    window.open(method.linkUrl, "_blank");
     return;
   }
 
-  if (action === "link") {
-    if (method.link && method.link.trim()) window.open(method.link, "_blank", "noopener,noreferrer");
-    else toast("Método sin enlace configurado.");
-    return;
+  if(method.kind === "qr"){
+    $("qrTitle").textContent = `${method.title} — Escanea para pagar`;
+    $("qrSub").textContent = "Escanea el QR y completa el pago.";
+    $("qrImg").src = method.qrImg;
+    $("qrFoot").textContent = method.linkUrl ? `Link alterno: ${method.linkUrl}` : "";
+    show($("qrModal"));
+  } else {
+    // manual -> no QR
+    $("statusHint").textContent = "Método manual: marca Pago completado cuando cobres.";
   }
-
-  toast("Método manual — cobra directo.");
 }
 
-function markPaidAndTicket(){
-  if (!state.draft) return toast("Primero: Guardar el registro.");
+function closeQR(){ hide($("qrModal")); }
 
-  const record = { ...state.draft };
-  record.status = "PAID";
-  record.paidAt = Date.now();
-  record.receiptNo = makeReceiptNo(record.paidAt);
+/* ====== HISTORIAL (merge nube + local) ====== */
+function mergedHistory(){
+  const local = localGet();
 
-  state.history.unshift(record);
-  saveHistory();
+  // estrategia: mostrar nube primero (si existe), y local no-subido separado
+  const cloudIds = new Set(cloudCache.map(x => x._cloudId).filter(Boolean));
 
-  generateTicketPDF(record);
+  const localPending = local
+    .filter(x => x && x._cloud !== true)
+    .map(x => ({ ...x, _cloud:false, _pending:true }));
 
-  state.draft = null;
-  renderHistoryTable();
+  const cloud = cloudCache.map(x => ({ ...x, _cloud:true, _pending:false }));
 
-  $("#regHint").textContent = "Pago registrado + ticket generado.";
-  toast("Pago completado + Ticket ✅");
+  // si no hay nube (db off) muestra local completo
+  if(!db) return local.map(x => ({...x, _cloud:false, _pending:(x._cloud!==true)}));
+
+  // merge
+  return [...cloud, ...localPending].slice(0, 400);
 }
 
-/* ================= QR MODAL ================= */
-function openQR(title, imgSrc, sub){
-  $("#qrTitle").textContent = title || "Escanear QR";
-  $("#qrSub").textContent = sub || "Escanee el código QR.";
-  $("#qrImg").src = imgSrc;
-  $("#qrModal").classList.remove("hidden");
-}
-function closeQR(){
-  $("#qrModal").classList.add("hidden");
-  $("#qrImg").src = "";
-}
+function renderHistory(){
+  const tbody = $("histBody");
+  tbody.innerHTML = "";
 
-/* ================= HISTORIAL ================= */
-function openHistory(){
-  $("#modal").classList.remove("hidden");
-  renderHistoryTable();
-}
-function closeHistory(){
-  $("#modal").classList.add("hidden");
-}
+  const rows = mergedHistory();
 
-function renderHistoryTable(){
-  const body = $("#historyBody");
-  body.innerHTML = "";
-
-  if (!state.history.length){
-    body.innerHTML = `<tr><td colspan="7" style="color:rgba(255,255,255,.65)">Sin registros todavía.</td></tr>`;
-    return;
-  }
-
-  state.history.forEach(r => {
+  rows.forEach((p) => {
     const tr = document.createElement("tr");
+    const dt = p.createdAt?.toDate ? p.createdAt.toDate() : (p.dateISO ? new Date(p.dateISO) : new Date());
+    const dateStr = dt.toLocaleString("es-PR");
+
+    const status = p.status || (p._pending ? "PENDIENTE" : "OK");
+    const id = p.receiptId || p._cloudId || "-";
+
     tr.innerHTML = `
-      <td>${fmtDateTime(r.paidAt || r.createdAt)}</td>
-      <td>${escapeHTML(r.name)}</td>
-      <td>${escapeHTML(r.phone)}</td>
-      <td>${escapeHTML(r.methodName)}</td>
-      <td class="r"><b>${fmtMoney(r.amount)}</b></td>
-      <td>${r.status === "PAID" ? "PAGADO" : "PENDIENTE"}</td>
-      <td class="r">${r.receiptNo ? escapeHTML(r.receiptNo) : "—"}</td>
+      <td>${dateStr}</td>
+      <td>${p.method || "-"}</td>
+      <td>${p.name || "-"}</td>
+      <td>${p.phone || "-"}</td>
+      <td>${p.note || ""}</td>
+      <td class="r">${fmtMoney(p.amount)}</td>
+      <td>${status}</td>
+      <td>${id}</td>
     `;
-    body.appendChild(tr);
+
+    tbody.appendChild(tr);
   });
 }
 
-function clearAll(){
-  if (!confirm("¿Borrar todo el historial?")) return;
-  state.history = [];
-  saveHistory();
-  renderHistoryTable();
-  toast("Historial borrado.");
+/* ====== PDF TICKET (pequeño tipo tienda) ====== */
+async function printTicket(payment){
+  const { jsPDF } = window.jspdf;
+
+  // ticket narrow (80mm aprox) -> jsPDF usa "mm"
+  const doc = new jsPDF({ unit:"mm", format:[80, 150] });
+
+  const x = 6;
+  let y = 10;
+
+  doc.setFont("courier", "bold");
+  doc.setFontSize(12);
+  doc.text(CONFIG.brand.toUpperCase(), x, y); y += 6;
+
+  doc.setFont("courier", "normal");
+  doc.setFontSize(9);
+  doc.text(`Tel: ${CONFIG.phone}`, x, y); y += 5;
+  doc.text(`${CONFIG.location}`, x, y); y += 6;
+
+  doc.setDrawColor(200);
+  doc.line(x, y, 74, y); y += 6;
+
+  const d = new Date();
+  doc.text(`Recibo: ${payment.receiptId}`, x, y); y += 5;
+  doc.text(`Fecha: ${d.toLocaleString("es-PR")}`, x, y); y += 6;
+
+  doc.setFont("courier", "bold");
+  doc.text("CLIENTE", x, y); y += 5;
+  doc.setFont("courier", "normal");
+  doc.text(`${payment.name}`, x, y); y += 5;
+  if(payment.phone) { doc.text(`${payment.phone}`, x, y); y += 5; }
+  if(payment.invoice) { doc.text(`Ref: ${payment.invoice}`, x, y); y += 5; }
+  y += 2;
+
+  doc.setFont("courier", "bold");
+  doc.text("PAGO", x, y); y += 5;
+  doc.setFont("courier", "normal");
+  doc.text(`Método: ${payment.method}`, x, y); y += 5;
+  doc.text(`Estado: ${payment.status}`, x, y); y += 6;
+
+  doc.setFont("courier", "bold");
+  doc.setFontSize(12);
+  doc.text(`TOTAL: ${fmtMoney(payment.amount)}`, x, y); y += 7;
+
+  doc.setFont("courier", "normal");
+  doc.setFontSize(9);
+  if(payment.note){
+    doc.text("Nota:", x, y); y += 5;
+    doc.text(doc.splitTextToSize(payment.note, 66), x, y);
+    y += 10;
+  }
+
+  doc.line(x, y, 74, y); y += 8;
+  doc.text("Gracias por su pago.", x, y);
+
+  doc.save(`${payment.receiptId}.pdf`);
 }
 
-/* ================= EXPORT ================= */
+/* ====== EVENTS ====== */
+function bindEvents(){
+  $("btnBack").addEventListener("click", backToMethods);
+
+  $("btnCloseQR").addEventListener("click", closeQR);
+  $("qrModal").addEventListener("click", (e) => {
+    if(e.target === $("qrModal")) closeQR();
+  });
+
+  $("btnHistory").addEventListener("click", () => {
+    show($("histModal"));
+    renderHistory();
+  });
+
+  $("btnCloseHist").addEventListener("click", () => hide($("histModal")));
+  $("histModal").addEventListener("click", (e) => {
+    if(e.target === $("histModal")) hide($("histModal"));
+  });
+
+  $("btnExportCSV").addEventListener("click", exportCSV);
+  $("btnExportJSON").addEventListener("click", exportJSON);
+  $("btnClearLocal").addEventListener("click", () => {
+    if(confirm("¿Borrar historial local?")){
+      localSet([]);
+      renderHistory();
+    }
+  });
+
+  $("btnSync").addEventListener("click", async () => {
+    $("btnSync").disabled = true;
+    const r = await syncLocalToCloud();
+    $("btnSync").disabled = false;
+    alert(r.msg);
+    renderHistory();
+  });
+
+  // Guardar (submit)
+  $("payForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const payment = buildPayment("GUARDADO");
+    lastPayment = payment;
+
+    localAdd(payment);
+    $("statusHint").textContent = "Guardado local ✅ (intentando nube...)";
+
+    const res = await saveToCloud(payment);
+    if(res.ok){
+      markLocalAsCloud(payment.receiptId, res.id);
+      $("statusHint").textContent = "Guardado en nube ✅";
+    }else{
+      $("statusHint").textContent = "Sin internet / nube: quedó en local (pendiente).";
+    }
+  });
+
+  // Ir a pagar
+  $("btnGoPay").addEventListener("click", () => {
+    const draft = buildPayment("PENDIENTE");
+    lastPayment = draft;
+    openQR(selectedMethod);
+  });
+
+  // Pago completado manual + PDF + save
+  $("btnPaid").addEventListener("click", async () => {
+    const payment = buildPayment("PAGADO");
+    lastPayment = payment;
+
+    localAdd(payment);
+    $("statusHint").textContent = "Pago marcado PAGADO. Guardando...";
+
+    const res = await saveToCloud(payment);
+    if(res.ok){
+      markLocalAsCloud(payment.receiptId, res.id);
+      $("statusHint").textContent = "PAGADO ✅ (nube)";
+    }else{
+      $("statusHint").textContent = "PAGADO ✅ (local pendiente de sync)";
+    }
+
+    await printTicket(payment);
+  });
+
+  // Sync automático al volver online
+  window.addEventListener("online", async () => {
+    const r = await syncLocalToCloud();
+    console.log("Sync online:", r);
+  });
+}
+
+/* ====== BUILD PAYMENT ====== */
+function buildPayment(status){
+  const name = $("fName").value.trim();
+  const phone = $("fPhone").value.trim();
+  const amount = parseFloat(String($("fAmount").value).replace(/[^0-9.]/g,"")) || 0;
+  const invoice = $("fInvoice").value.trim();
+  const note = $("fNote").value.trim();
+
+  if(!selectedMethod) throw new Error("No method selected");
+
+  return {
+    receiptId: makeReceiptId(),
+    dateISO: nowISO(),
+    status,
+    method: selectedMethod.title,
+    methodId: selectedMethod.id,
+    name,
+    phone,
+    amount,
+    invoice,
+    note,
+    _cloud: false
+  };
+}
+
+function markLocalAsCloud(receiptId, cloudId){
+  const arr = localGet();
+  const idx = arr.findIndex(x => x && x.receiptId === receiptId);
+  if(idx >= 0){
+    arr[idx]._cloud = true;
+    arr[idx]._cloudId = cloudId || null;
+    localSet(arr);
+  }
+}
+
+/* ====== EXPORTS ====== */
+function downloadFile(filename, content, type){
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function exportJSON(){
-  const payload = { exportedAt: new Date().toISOString(), currency: CONFIG.currency, history: state.history };
-  downloadFile(`historial_pagos_${todayStamp()}.json`, JSON.stringify(payload, null, 2), "application/json");
+  const data = mergedHistory();
+  downloadFile(`nexuspos_historial_${Date.now()}.json`, JSON.stringify(data, null, 2), "application/json");
 }
 
 function exportCSV(){
-  const headers = ["Fecha","Cliente","Telefono","Metodo","Cantidad","Estado","Recibo"];
-  const lines = [headers.join(",")];
+  const data = mergedHistory();
+  const header = ["fecha","metodo","cliente","telefono","nota","monto","estado","id"];
+  const lines = [header.join(",")];
 
-  state.history.forEach(r => {
-    lines.push([
-      csvCell(fmtDateTime(r.paidAt || r.createdAt)),
-      csvCell(r.name),
-      csvCell(r.phone),
-      csvCell(r.methodName),
-      csvCell(String(r.amount)),
-      csvCell(r.status),
-      csvCell(r.receiptNo || "")
-    ].join(","));
+  data.forEach(p => {
+    const dt = p.createdAt?.toDate ? p.createdAt.toDate() : (p.dateISO ? new Date(p.dateISO) : new Date());
+    const row = [
+      `"${dt.toLocaleString("es-PR")}"`,
+      `"${(p.method||"").replaceAll('"','""')}"`,
+      `"${(p.name||"").replaceAll('"','""')}"`,
+      `"${(p.phone||"").replaceAll('"','""')}"`,
+      `"${(p.note||"").replaceAll('"','""')}"`,
+      `${Number(p.amount||0)}`,
+      `"${(p.status||"").replaceAll('"','""')}"`,
+      `"${(p.receiptId || p._cloudId || "").replaceAll('"','""')}"`
+    ];
+    lines.push(row.join(","));
   });
 
-  downloadFile(`historial_pagos_${todayStamp()}.csv`, lines.join("\n"), "text/csv");
+  downloadFile(`nexuspos_historial_${Date.now()}.csv`, lines.join("\n"), "text/csv");
 }
 
-/* ================= TICKET POS (jsPDF) ================= */
-function generateTicketPDF(r){
-  const { jsPDF } = window.jspdf;
+/* ====== INIT ====== */
+function init(){
+  renderMethods();
+  bindEvents();
 
-  const W = CONFIG.business.ticket.widthPt;
-  const M = CONFIG.business.ticket.marginPt;
-  const LH = CONFIG.business.ticket.lineHeight;
-  const FS = CONFIG.business.ticket.fontSize;
-
-  const lines = buildTicketLines(r, W - (M*2), FS);
-
-  const topPad = 14;
-  const bottomPad = 16;
-  const H = topPad + bottomPad + (lines.length * LH);
-
-  const doc = new jsPDF({ unit:"pt", format:[W, H] });
-  doc.setFont("courier", "normal");
-  doc.setFontSize(FS);
-
-  let y = topPad;
-  lines.forEach(line=>{
-    doc.text(line, M, y);
-    y += LH;
-  });
-
-  doc.save(`Recibo_${r.receiptNo}.pdf`);
-}
-
-function buildTicketLines(r, maxTextWidthPt, fontSize){
-  const title = CONFIG.business.receiptTitle;
-  const biz = CONFIG.business.name;
-  const tel = `Tel: ${CONFIG.business.phone}`;
-  const addr = `${CONFIG.business.address}`;
-
-  const receipt = `Recibo #: ${r.receiptNo}`;
-  const date = `Fecha: ${fmtDateTime(r.paidAt)}`;
-
-  const sep = "-".repeat(32);
-  const out = [];
-
-  out.push(centerText(title, 32));
-  out.push(centerText(biz, 32));
-  out.push(centerText(tel, 32));
-  out.push(centerText(addr, 32));
-  out.push(sep);
-
-  out.push(receipt);
-  out.push(date);
-  out.push(sep);
-
-  out.push("CLIENTE");
-  out.push(...wrapText(`Nombre: ${r.name}`, maxTextWidthPt, fontSize));
-  out.push(...wrapText(`Tel: ${r.phone}`, maxTextWidthPt, fontSize));
-  out.push(sep);
-
-  out.push("PAGO");
-  out.push(`Metodo: ${r.methodName}`);
-  out.push("Estado: PAGADO");
-  out.push(sep);
-
-  out.push(`TOTAL: ${fmtMoney(r.amount)}`);
-  out.push(sep);
-
-  if (r.note && r.note.trim()){
-    out.push("NOTA");
-    out.push(...wrapText(`- ${r.note.trim()}`, maxTextWidthPt, fontSize));
-    out.push(sep);
+  // Listener nube
+  if(db){
+    startCloudListener((cloud) => {
+      cloudCache = cloud;
+      // si historial abierto, repinta
+      if(!$("histModal").classList.contains("hidden")){
+        renderHistory();
+      }
+    });
   }
 
-  out.push(centerText(CONFIG.business.ticket.footer, 32));
-  return out;
+  // intento de sync al arrancar
+  syncLocalToCloud().then(r => console.log("Sync init:", r));
 }
 
-function wrapText(text, maxWidthPt, fontSize){
-  const { jsPDF } = window.jspdf;
-  const d = new jsPDF({ unit:"pt", format:[300,300] });
-  d.setFont("courier","normal");
-  d.setFontSize(fontSize);
-  return d.splitTextToSize(text, maxWidthPt);
-}
-
-function centerText(t, widthChars){
-  const s = String(t || "");
-  if (s.length >= widthChars) return s.slice(0, widthChars);
-  const pad = Math.floor((widthChars - s.length)/2);
-  return " ".repeat(pad) + s;
-}
-
-/* ================= STORAGE ================= */
-function loadHistory(){
-  try { return JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); }
-  catch { return []; }
-}
-function saveHistory(){
-  localStorage.setItem(STORE_KEY, JSON.stringify(state.history));
-}
-
-/* ================= HELPERS ================= */
-function fmtMoney(n){
-  const v = Number(n || 0);
-  return v.toLocaleString("en-US", { style:"currency", currency: CONFIG.currency });
-}
-function fmtDateTime(ts){
-  const d = new Date(ts);
-  return d.toLocaleString("es-PR", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" });
-}
-function parseMoney(v){
-  const n = Number(String(v || "").replace(",", "."));
-  return isFinite(n) ? round2(n) : 0;
-}
-function round2(n){ return Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100; }
-function cryptoId(){
-  if (window.crypto?.randomUUID) return crypto.randomUUID();
-  return "id_" + Math.random().toString(16).slice(2) + "_" + Date.now();
-}
-function escapeHTML(s){
-  return String(s ?? "")
-    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
-}
-function csvCell(s){
-  const t = String(s ?? "");
-  if (/[",\n]/.test(t)) return `"${t.replaceAll('"','""')}"`;
-  return t;
-}
-function downloadFile(filename, content, mime){
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-function todayStamp(){
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,"0");
-  const day = String(d.getDate()).padStart(2,"0");
-  return `${y}-${m}-${day}`;
-}
-function makeReceiptNo(ts){
-  const d = new Date(ts);
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,"0");
-  const day = String(d.getDate()).padStart(2,"0");
-  const hh = String(d.getHours()).padStart(2,"0");
-  const mm = String(d.getMinutes()).padStart(2,"0");
-  const ss = String(d.getSeconds()).padStart(2,"0");
-  return `R-${y}${m}${day}-${hh}${mm}${ss}`;
-}
-function toast(msg){
-  const t = document.createElement("div");
-  t.textContent = msg;
-  t.style.position="fixed";
-  t.style.left="50%";
-  t.style.bottom="130px";
-  t.style.transform="translateX(-50%)";
-  t.style.padding="10px 12px";
-  t.style.borderRadius="12px";
-  t.style.background="rgba(0,0,0,.75)";
-  t.style.border="1px solid rgba(255,255,255,.15)";
-  t.style.color="white";
-  t.style.fontWeight="1000";
-  t.style.zIndex="9999";
-  t.style.backdropFilter="blur(10px)";
-  document.body.appendChild(t);
-  setTimeout(()=>{ t.style.opacity="0"; t.style.transition="opacity .18s ease"; }, 1400);
-  setTimeout(()=> t.remove(), 1700);
-}
+document.addEventListener("DOMContentLoaded", init);
