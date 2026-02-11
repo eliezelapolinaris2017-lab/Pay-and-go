@@ -288,3 +288,61 @@ input{
   body::before{ background-position: center 88%; background-size: 300px auto; }
   .table{ min-width: 720px; }
 }
+/* ===== FIX LAYOUT MINI: que NO queden flotando ===== */
+.gridFull{
+  /* ocupa más área y centra el bloque */
+  min-height: 360px;
+  height: auto;
+  align-content: start;
+  justify-content: center;
+
+  /* grid consistente (4 por fila en iPhone) */
+  grid-template-columns: repeat(4, var(--mini));
+  gap: 16px 14px;
+
+  /* empuja el grid un poco hacia abajo para balance */
+  padding-top: 18px;
+}
+
+/* si hay 5 botones, que el 5to se centre bonito */
+.gridFull::after{
+  content:"";
+  width: var(--mini);
+  height: var(--mini);
+}
+
+/* botón con más “presencia” sin crecer */
+.tileBtn{
+  background:
+    radial-gradient(120px 120px at 35% 25%, rgba(255,255,255,.14), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04));
+  border-color: rgba(255,255,255,.18);
+  box-shadow:
+    0 18px 55px rgba(0,0,0,.78),
+    inset 0 1px 0 rgba(255,255,255,.12);
+}
+
+/* icon wrap más “glass” */
+.tileLogoWrap{
+  background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.18);
+}
+
+/* texto un poco más legible */
+.tileTitle{ font-size: 13.5px; }
+.tileSmall{ font-size: 10.8px; opacity:.9; }
+
+/* ===== BG PNG: más abajo y más pequeño para NO competir ===== */
+body::before{
+  background-position: center 86%;
+  background-size: 420px auto;
+  opacity: .88;
+}
+
+/* ===== iPhone pequeño: 3 columnas para que no apriete ===== */
+@media (max-width: 390px){
+  .gridFull{
+    grid-template-columns: repeat(3, var(--mini));
+  }
+  .gridFull::after{ display:none; }
+}
