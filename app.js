@@ -11,9 +11,9 @@ const STORE_KEY = "PAY_PLATFORM_V4_HISTORY";
 /* ===== CONFIG EDITABLE ===== */
 const CONFIG = {
   business: {
-    name: "Oasis / Nexus Payments",
+    name: "Oasis Services PR / Nexus Payments",
     phone: "787-664-3079",
-    address: "Puerto Rico",
+    address: "Tujillo Alto",
     receiptTitle: "RECIBO DE PAGO",
 
     // Tamaño ticket (en puntos). 1in=72pt. 58mm ≈ 164pt, 80mm ≈ 227pt
@@ -30,10 +30,10 @@ const CONFIG = {
   methods: [
     { id:"tap", name:"Tap to Pay", desc:"iPhone", icon:"📲", link:"https://example.com/tap",
       bg:"linear-gradient(135deg, rgba(47,122,246,.80), rgba(0,0,0,.22))" },
-    { id:"stripe", name:"Stripe", desc:"Tarjeta / Link", icon:"💳", link:"https://example.com/stripe",
+    { id:"stripe", name:"Stripe", desc:"Tarjeta / Link", icon:"💳", link:"https://buy.stripe.com/5kQ9AS8nQ2mA6w6aFV1RC0h",
       bg:"linear-gradient(135deg, rgba(140,92,255,.80), rgba(0,0,0,.22))" },
     { id:"ath", name:"ATH Móvil", desc:"PR", icon:"🟠",
-      link:"https://pagos.athmovilapp.com/pagoPorCodigo.html?id=CAMBIA-ESTE-ID",
+      link:"https://pagos.athmovilapp.com/pagoPorCodigo.html?id=c7995d4c-9a1c-4ab9-8ca9-2561c76b6fc8",
       bg:"linear-gradient(135deg, rgba(255,153,0,.85), rgba(0,0,0,.22))" },
     { id:"cash", name:"Cash", desc:"Efectivo", icon:"💵", link:"",
       bg:"linear-gradient(135deg, rgba(40,199,111,.78), rgba(0,0,0,.22))" },
