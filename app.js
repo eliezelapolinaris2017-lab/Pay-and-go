@@ -13,7 +13,7 @@ const STORE_KEY = "PAY_PLATFORM_V3_HISTORY";
 const CONFIG = {
   business: {
     name: "Oasis / Nexus Payments",
-    phone: "787-000-0000",
+    phone: "787-664-3079",
     address: "Puerto Rico",
     receiptTitle: "RECIBO DE PAGO"
   },
@@ -34,7 +34,7 @@ const CONFIG = {
       name:"Stripe",
       desc:"Tarjeta / Link",
       icon:"💳",
-      link:"https://example.com/stripe",
+      link:"https://buy.stripe.com/5kQ9AS8nQ2mA6w6aFV1RC0h",
       bg:"linear-gradient(135deg, rgba(140,92,255,.80), rgba(0,0,0,.22))"
     },
     {
@@ -42,7 +42,7 @@ const CONFIG = {
       name:"ATH Móvil",
       desc:"PR",
       icon:"🟠",
-      link:"https://pagos.athmovilapp.com/pagoPorCodigo.html?id=CAMBIA-ESTE-ID",
+      link:"https://pagos.athmovilapp.com/pagoPorCodigo.html?id=c7995d4c-9a1c-4ab9-8ca9-2561c76b6fc8",
       bg:"linear-gradient(135deg, rgba(255,153,0,.85), rgba(0,0,0,.22))"
     },
     {
