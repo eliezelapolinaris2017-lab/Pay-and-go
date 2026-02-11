@@ -6,12 +6,10 @@
   <title>Nexus POS Express</title>
   <meta name="description" content="Nexus POS Express — Payment Platform"/>
 
-  <!-- PWA -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#07070b">
   <link rel="icon" href="favicon.ico">
 
-  <!-- iOS PWA -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Nexus POS">
@@ -49,7 +47,7 @@
         <button id="pinEnterBtn" class="btn primary">Entrar</button>
       </div>
 
-      <div class="pin-hint" id="pinHint">Tip: Puedes cambiar el PIN dentro de Historial.</div>
+      <div class="pin-hint">Puedes cambiar el PIN dentro de Historial.</div>
     </div>
   </section>
 
@@ -63,10 +61,9 @@
   </header>
 
   <main class="wrap">
-    <!-- VIEW: HOME -->
+    <!-- HOME -->
     <section id="viewHome" class="view">
       <div class="pay-grid">
-        <!-- ICON ONLY + NAME OUTSIDE -->
         <button class="pay-icon-btn icon-only" data-method="stripe">
           <img src="assets/icons/stripe.png" alt="Stripe">
           <span>Stripe</span>
@@ -92,7 +89,6 @@
           <span>Checks</span>
         </button>
 
-        <!-- LINKS DE PAGO -->
         <button class="pay-icon-btn icon-only link-btn" data-method="stripe_link">
           <img src="assets/icons/stripe.png" alt="Stripe Link">
           <span>Stripe Link</span>
@@ -105,7 +101,7 @@
       </div>
     </section>
 
-    <!-- VIEW: REGISTRO -->
+    <!-- REGISTRO -->
     <section id="viewRegister" class="view hidden">
       <div class="card glass">
         <div class="pill" id="methodPill">Método: —</div>
@@ -138,34 +134,31 @@
         </div>
 
         <div class="footnote">
-          POS operativo: “Pago completado” es manual. El ticket se comparte por Mensajes desde el Share Sheet.
+          “Pago completado” es manual. El ticket se comparte por Mensajes desde el Share Sheet.
         </div>
       </div>
     </section>
 
-    <!-- VIEW: COBRO -->
+    <!-- COBRO -->
     <section id="viewCharge" class="view hidden">
       <div class="card glass">
         <div class="pill" id="chargeTitle">Método: —</div>
 
-        <!-- QR -->
         <div id="qrBlock" class="qr-wrap hidden">
           <div class="qr-card">
             <img id="qrImg" class="qr-img" alt="QR de pago">
           </div>
         </div>
 
-        <!-- LINK (OCULTO — SOLO BOTONES) -->
         <div id="linkBlock" class="link-wrap hidden">
           <div class="link-title">Link de pago</div>
-          <div class="footnote">No se muestra el link en pantalla. Se abre o se envía desde el botón.</div>
+          <div class="footnote">El link no se muestra. Se abre o se envía desde el botón.</div>
           <div class="btn-row">
             <button id="openPayLinkBtn" class="btn primary">Abrir link</button>
             <button id="sendPayLinkBtn" class="btn">Enviar link</button>
           </div>
         </div>
 
-        <!-- INFO NO QR -->
         <div id="infoBlock" class="footnote hidden"></div>
 
         <div class="btn-row">
@@ -173,7 +166,7 @@
           <button id="paidBtn" class="btn success">Pago completado (manual)</button>
         </div>
 
-        <div class="footnote" id="chargeHint">
+        <div class="footnote">
           El cliente paga. Luego marca “Pago completado (manual)”.
         </div>
       </div>
@@ -187,7 +180,7 @@
     <div class="footer-text">PAYMENT PLATFORM</div>
   </footer>
 
-  <!-- MODAL: HISTORIAL -->
+  <!-- HISTORIAL -->
   <section id="historyModal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal-card glass">
       <div class="modal-top">
