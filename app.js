@@ -1,13 +1,12 @@
 /* app.js */
 /*************************************************
  * Plataforma Pagos — 2 pantallas (botones grandes)
- * 1) Métodos (full-screen tiles)
- * 2) Registro + link + pago completado manual + recibo jsPDF
+ * + Recibo tipo ticket (POS) angosto con jsPDF
  *************************************************/
 
 const $ = (s) => document.querySelector(s);
 
-const STORE_KEY = "PAY_PLATFORM_V3_HISTORY";
+const STORE_KEY = "PAY_PLATFORM_V4_HISTORY";
 
 /* ===== CONFIG EDITABLE ===== */
 const CONFIG = {
@@ -15,52 +14,31 @@ const CONFIG = {
     name: "Oasis / Nexus Payments",
     phone: "787-664-3079",
     address: "Puerto Rico",
-    receiptTitle: "RECIBO DE PAGO"
+    receiptTitle: "RECIBO DE PAGO",
+
+    // Tamaño ticket (en puntos). 1in=72pt. 58mm ≈ 164pt, 80mm ≈ 227pt
+    ticket: {
+      widthPt: 227,     // 80mm aprox (recomendado)
+      marginPt: 14,
+      lineHeight: 12,
+      fontSize: 10,
+      footer: "Gracias por su pago."
+    }
   },
   currency: "USD",
 
-  // Edita links + colores aquí
   methods: [
-    {
-      id:"tap",
-      name:"Tap to Pay",
-      desc:"iPhone",
-      icon:"📲",
-      link:"https://example.com/tap",
-      bg:"linear-gradient(135deg, rgba(47,122,246,.80), rgba(0,0,0,.22))"
-    },
-    {
-      id:"stripe",
-      name:"Stripe",
-      desc:"Tarjeta / Link",
-      icon:"💳",
-      link:"https://buy.stripe.com/5kQ9AS8nQ2mA6w6aFV1RC0h",
-      bg:"linear-gradient(135deg, rgba(140,92,255,.80), rgba(0,0,0,.22))"
-    },
-    {
-      id:"ath",
-      name:"ATH Móvil",
-      desc:"PR",
-      icon:"🟠",
-      link:"https://pagos.athmovilapp.com/pagoPorCodigo.html?id=c7995d4c-9a1c-4ab9-8ca9-2561c76b6fc8",
-      bg:"linear-gradient(135deg, rgba(255,153,0,.85), rgba(0,0,0,.22))"
-    },
-    {
-      id:"cash",
-      name:"Cash",
-      desc:"Efectivo",
-      icon:"💵",
-      link:"",
-      bg:"linear-gradient(135deg, rgba(40,199,111,.78), rgba(0,0,0,.22))"
-    },
-    {
-      id:"check",
-      name:"Checks",
-      desc:"Cheque",
-      icon:"🧾",
-      link:"",
-      bg:"linear-gradient(135deg, rgba(214,178,94,.82), rgba(0,0,0,.22))"
-    }
+    { id:"tap", name:"Tap to Pay", desc:"iPhone", icon:"📲", link:"https://example.com/tap",
+      bg:"linear-gradient(135deg, rgba(47,122,246,.80), rgba(0,0,0,.22))" },
+    { id:"stripe", name:"Stripe", desc:"Tarjeta / Link", icon:"💳", link:"https://example.com/stripe",
+      bg:"linear-gradient(135deg, rgba(140,92,255,.80), rgba(0,0,0,.22))" },
+    { id:"ath", name:"ATH Móvil", desc:"PR", icon:"🟠",
+      link:"https://pagos.athmovilapp.com/pagoPorCodigo.html?id=CAMBIA-ESTE-ID",
+      bg:"linear-gradient(135deg, rgba(255,153,0,.85), rgba(0,0,0,.22))" },
+    { id:"cash", name:"Cash", desc:"Efectivo", icon:"💵", link:"",
+      bg:"linear-gradient(135deg, rgba(40,199,111,.78), rgba(0,0,0,.22))" },
+    { id:"check", name:"Checks", desc:"Cheque", icon:"🧾", link:"",
+      bg:"linear-gradient(135deg, rgba(214,178,94,.82), rgba(0,0,0,.22))" }
   ]
 };
 
@@ -91,7 +69,6 @@ function bindUI(){
   $("#btnExportCSV").addEventListener("click", exportCSV);
   $("#btnClear").addEventListener("click", clearAll);
 
-  // Enter: guardar
   ["fName","fPhone","fAmount","fNote"].forEach(id=>{
     const el = $("#"+id);
     el.addEventListener("keydown",(e)=>{
@@ -110,7 +87,7 @@ function gotoRegister(method){
   $("#fPhone").value = "";
   $("#fAmount").value = "";
   $("#fNote").value = "";
-  $("#regHint").textContent = "Flujo recomendado: Guardar → Ir a pagar → Pago completado (manual).";
+  $("#regHint").textContent = "Flujo: Guardar → Ir a pagar → Pago completado (manual) para recibo.";
 
   $("#screenMethods").classList.add("hidden");
   $("#screenRegister").classList.remove("hidden");
@@ -133,7 +110,6 @@ function renderMethods(){
     btn.className = "tileBtn";
     btn.type = "button";
     btn.style.background = m.bg || "linear-gradient(135deg, rgba(47,122,246,.70), rgba(0,0,0,.25))";
-
     btn.innerHTML = `
       <div class="tileIcon">${escapeHTML(m.icon || "💳")}</div>
       <div class="tileTitle">${escapeHTML(m.name)}</div>
@@ -175,7 +151,7 @@ function saveDraft(){
     receiptNo: null
   };
 
-  $("#regHint").textContent = "Guardado ✅ Ahora: Ir a pagar → luego Pago completado (manual) para generar recibo.";
+  $("#regHint").textContent = "Guardado ✅ Ahora: Ir a pagar → Pago completado (manual) para generar recibo ticket.";
   toast("Guardado ✅");
 }
 
@@ -184,9 +160,7 @@ function openSelectedPayLink(){
   const method = state.selectedMethod;
   if (!method) return toast("No hay método seleccionado.");
 
-  if (!state.draft) {
-    toast("Abriendo enlace. Recomendación: guarda primero para historial.");
-  }
+  if (!state.draft) toast("Abriendo enlace. Mejor guarda primero para historial.");
 
   if (method.link && method.link.trim()) {
     window.open(method.link, "_blank", "noopener,noreferrer");
@@ -207,88 +181,127 @@ function markPaidAndReceipt(){
   state.history.unshift(record);
   saveHistory();
 
-  generateReceiptPDF(record);
+  generateTicketPDF(record);
 
   state.draft = null;
   renderHistoryTable();
 
-  $("#regHint").textContent = "Pago registrado + recibo generado. Vuelve para otro cobro.";
+  $("#regHint").textContent = "Pago registrado + recibo ticket generado.";
   toast("Pago completado + Recibo ✅");
 }
 
-/* ================= RECEIPT (jsPDF) ================= */
-function generateReceiptPDF(r){
+/* ================= RECIBO TIPO TICKET (jsPDF) =================
+   - Papel angosto (80mm aprox)
+   - Alto dinámico (según contenido)
+   - Fuente monospace para look POS
+=============================================================== */
+function generateTicketPDF(r){
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit:"pt", format:"letter" });
 
-  const left = 44;
-  let y = 52;
+  const W = CONFIG.business.ticket.widthPt;
+  const M = CONFIG.business.ticket.marginPt;
+  const LH = CONFIG.business.ticket.lineHeight;
+  const FS = CONFIG.business.ticket.fontSize;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(CONFIG.business.receiptTitle, left, y);
+  // Construimos líneas para calcular alto real
+  const lines = buildTicketLines(r, W - (M*2), FS);
 
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  y += 18;
-  doc.text(CONFIG.business.name, left, y);
-  y += 14;
-  doc.text(`Tel: ${CONFIG.business.phone}`, left, y);
-  y += 14;
-  doc.text(`${CONFIG.business.address}`, left, y);
+  const topPad = 14;
+  const bottomPad = 16;
+  const H = topPad + bottomPad + (lines.length * LH);
 
-  y += 18;
-  doc.setDrawColor(180);
-  doc.line(left, y, 568, y);
+  const doc = new jsPDF({ unit:"pt", format:[W, H] });
 
-  y += 22;
-  doc.setFont("helvetica", "bold");
-  doc.text(`Recibo #: ${r.receiptNo}`, left, y);
+  // Estilo POS
+  doc.setFont("courier", "normal"); // monospace
+  doc.setFontSize(FS);
 
-  doc.setFont("helvetica", "normal");
-  y += 14;
-  doc.text(`Fecha: ${fmtDateTime(r.paidAt)}`, left, y);
+  let y = topPad;
 
-  y += 18;
-  doc.setFont("helvetica", "bold");
-  doc.text("Cliente", left, y);
-  doc.setFont("helvetica", "normal");
-  y += 14;
-  doc.text(`Nombre: ${r.name}`, left, y);
-  y += 14;
-  doc.text(`Teléfono: ${r.phone}`, left, y);
-
-  y += 18;
-  doc.setFont("helvetica", "bold");
-  doc.text("Pago", left, y);
-  doc.setFont("helvetica", "normal");
-  y += 14;
-  doc.text(`Método: ${r.methodName}`, left, y);
-  y += 14;
-  doc.text(`Estado: PAGADO`, left, y);
-
-  y += 18;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text(`Total: ${fmtMoney(r.amount)}`, left, y);
-
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "normal");
-  if (r.note && r.note.trim()){
-    y += 18;
-    doc.setFont("helvetica", "bold");
-    doc.text("Nota", left, y);
-    doc.setFont("helvetica", "normal");
-    y += 14;
-    doc.text(doc.splitTextToSize(r.note, 520), left, y);
-  }
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(120);
-  doc.text("Gracias por su pago.", left, 742);
+  // print lines
+  lines.forEach(line=>{
+    doc.text(line, M, y);
+    y += LH;
+  });
 
   doc.save(`Recibo_${r.receiptNo}.pdf`);
+}
+
+function buildTicketLines(r, maxTextWidthPt, fontSize){
+  // helper para centrar y cortar
+  const title = CONFIG.business.receiptTitle;
+  const biz = CONFIG.business.name;
+  const tel = `Tel: ${CONFIG.business.phone}`;
+  const addr = `${CONFIG.business.address}`;
+
+  const receipt = `Recibo #: ${r.receiptNo}`;
+  const date = `Fecha: ${fmtDateTime(r.paidAt)}`;
+
+  const clientH = "CLIENTE";
+  const c1 = `Nombre: ${r.name}`;
+  const c2 = `Tel: ${r.phone}`;
+
+  const payH = "PAGO";
+  const p1 = `Metodo: ${r.methodName}`;
+  const p2 = `Estado: PAGADO`;
+
+  const totalLine = `TOTAL: ${fmtMoney(r.amount)}`;
+
+  const noteH = r.note && r.note.trim() ? "NOTA" : "";
+  const noteLines = r.note && r.note.trim() ? wrapText(`- ${r.note.trim()}`, maxTextWidthPt, fontSize) : [];
+
+  const sep = "-".repeat(32);
+
+  const out = [];
+  out.push(centerText(title, 32));
+  out.push(centerText(biz, 32));
+  out.push(centerText(tel, 32));
+  out.push(centerText(addr, 32));
+  out.push(sep);
+
+  out.push(receipt);
+  out.push(date);
+  out.push(sep);
+
+  out.push(clientH);
+  out.push(...wrapText(c1, maxTextWidthPt, fontSize));
+  out.push(...wrapText(c2, maxTextWidthPt, fontSize));
+  out.push(sep);
+
+  out.push(payH);
+  out.push(p1);
+  out.push(p2);
+  out.push(sep);
+
+  out.push(totalLine);
+  out.push(sep);
+
+  if (noteH){
+    out.push(noteH);
+    out.push(...noteLines);
+    out.push(sep);
+  }
+
+  out.push(centerText(CONFIG.business.ticket.footer, 32));
+
+  return out;
+}
+
+/* Wrap basado en ancho real aproximado: usamos jsPDF splitTextToSize con un doc dummy */
+function wrapText(text, maxWidthPt, fontSize){
+  const { jsPDF } = window.jspdf;
+  const d = new jsPDF({ unit:"pt", format:[300,300] });
+  d.setFont("courier","normal");
+  d.setFontSize(fontSize);
+  return d.splitTextToSize(text, maxWidthPt);
+}
+
+/* centrado por caracteres (look POS). 32 chars ~ ticket 80mm a FS10 courier */
+function centerText(t, widthChars){
+  const s = String(t || "");
+  if (s.length >= widthChars) return s.slice(0, widthChars);
+  const pad = Math.floor((widthChars - s.length)/2);
+  return " ".repeat(pad) + s;
 }
 
 /* ================= HISTORIAL ================= */
@@ -372,7 +385,10 @@ function fmtMoney(n){
 }
 function fmtDateTime(ts){
   const d = new Date(ts);
-  return d.toLocaleString("es-PR", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+  return d.toLocaleString("es-PR", {
+    year:"numeric", month:"2-digit", day:"2-digit",
+    hour:"2-digit", minute:"2-digit"
+  });
 }
 function parseMoney(v){
   const n = Number(String(v || "").replace(",", "."));
