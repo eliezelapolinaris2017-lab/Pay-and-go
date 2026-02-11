@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <title>Nexus POS Express</title>
+  <meta name="description" content="Nexus POS Express — Payment Platform"/>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#07070b">
+  <link rel="icon" href="favicon.ico">
+
+  <!-- iOS PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Nexus POS">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800;900&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css"/>
+
+  <!-- Firebase v8 -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+  <div class="bg" aria-hidden="true"></div>
+
+  <!-- PIN LOCK -->
+  <section id="pinLock" class="pin-lock hidden">
+    <div class="pin-card">
+      <div class="pin-title">Acceso protegido</div>
+      <div class="pin-sub">Entra tu PIN para usar el POS.</div>
+
+      <div class="pin-input">
+        <label>PIN</label>
+        <input id="pinInput" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="••••" autocomplete="off">
+      </div>
+
+      <div class="btn-row">
+        <button id="pinEnterBtn" class="btn primary">Entrar</button>
+      </div>
+
+      <div class="pin-hint" id="pinHint">Tip: Puedes cambiar el PIN dentro de Historial.</div>
+    </div>
+  </section>
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div>
+      <div id="title" class="h1">Select Payment Method</div>
+      <div id="subtitle" class="sub">Selecciona el método. Luego registras el cliente y cobras.</div>
+    </div>
+    <button id="openHistoryBtn" class="chip">Historial</button>
+  </header>
+
+  <main class="wrap">
+    <!-- VIEW: HOME -->
+    <section id="viewHome" class="view">
+      <div class="pay-grid">
+        <!-- ICON ONLY + NAME OUTSIDE -->
+        <button class="pay-icon-btn icon-only" data-method="stripe">
+          <img src="assets/icons/stripe.png" alt="Stripe">
+          <span>Stripe</span>
+        </button>
+
+        <button class="pay-icon-btn icon-only" data-method="ath">
+          <img src="assets/icons/ath.png" alt="ATH Móvil">
+          <span>ATH Móvil</span>
+        </button>
+
+        <button class="pay-icon-btn icon-only" data-method="tap">
+          <img src="assets/icons/tap.png" alt="Tap to Pay">
+          <span>Tap to Pay</span>
+        </button>
+
+        <button class="pay-icon-btn icon-only" data-method="cash">
+          <img src="assets/icons/cash.png" alt="Cash">
+          <span>Cash</span>
+        </button>
+
+        <button class="pay-icon-btn icon-only" data-method="checks">
+          <img src="assets/icons/checks.png" alt="Checks">
+          <span>Checks</span>
+        </button>
+
+        <!-- LINKS DE PAGO -->
+        <button class="pay-icon-btn icon-only link-btn" data-method="stripe_link">
+          <img src="assets/icons/stripe.png" alt="Stripe Link">
+          <span>Stripe Link</span>
+        </button>
+
+        <button class="pay-icon-btn icon-only link-btn" data-method="ath_link">
+          <img src="assets/icons/ath.png" alt="ATH Link">
+          <span>ATH Link</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- VIEW: REGISTRO -->
+    <section id="viewRegister" class="view hidden">
+      <div class="card glass">
+        <div class="pill" id="methodPill">Método: —</div>
+
+        <div class="form">
+          <div>
+            <label>Nombre</label>
+            <input id="inName" placeholder="Cliente" autocomplete="name">
+          </div>
+
+          <div>
+            <label>Teléfono (opcional)</label>
+            <input id="inPhone" placeholder="7870000000" inputmode="tel" autocomplete="tel">
+          </div>
+
+          <div>
+            <label>Monto ($)</label>
+            <input id="inAmount" placeholder="75.00" inputmode="decimal">
+          </div>
+
+          <div>
+            <label>Nota (opcional)</label>
+            <input id="inNote" placeholder="Ej: Servicio / Referencia">
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button id="backHomeBtn" class="btn">Volver</button>
+          <button id="toChargeBtn" class="btn primary">Continuar</button>
+        </div>
+
+        <div class="footnote">
+          POS operativo: “Pago completado” es manual. El ticket se comparte por Mensajes desde el Share Sheet.
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW: COBRO -->
+    <section id="viewCharge" class="view hidden">
+      <div class="card glass">
+        <div class="pill" id="chargeTitle">Método: —</div>
+
+        <!-- QR -->
+        <div id="qrBlock" class="qr-wrap hidden">
+          <div class="qr-card">
+            <img id="qrImg" class="qr-img" alt="QR de pago">
+          </div>
+        </div>
+
+        <!-- LINK (OCULTO — SOLO BOTONES) -->
+        <div id="linkBlock" class="link-wrap hidden">
+          <div class="link-title">Link de pago</div>
+          <div class="footnote">No se muestra el link en pantalla. Se abre o se envía desde el botón.</div>
+          <div class="btn-row">
+            <button id="openPayLinkBtn" class="btn primary">Abrir link</button>
+            <button id="sendPayLinkBtn" class="btn">Enviar link</button>
+          </div>
+        </div>
+
+        <!-- INFO NO QR -->
+        <div id="infoBlock" class="footnote hidden"></div>
+
+        <div class="btn-row">
+          <button id="editBtn" class="btn">Editar datos</button>
+          <button id="paidBtn" class="btn success">Pago completado (manual)</button>
+        </div>
+
+        <div class="footnote" id="chargeHint">
+          El cliente paga. Luego marca “Pago completado (manual)”.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer" aria-hidden="true">
+    <div class="footer-brand"></div>
+    <div class="footer-line"></div>
+    <div class="footer-text">PAYMENT PLATFORM</div>
+  </footer>
+
+  <!-- MODAL: HISTORIAL -->
+  <section id="historyModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-card glass">
+      <div class="modal-top">
+        <div>
+          <div class="modal-title">Historial</div>
+          <div class="modal-sub">Firebase primero. Cache local si estás offline.</div>
+        </div>
+        <button id="closeHistoryBtn" class="chip">Cerrar</button>
+      </div>
+
+      <div class="modal-actions">
+        <button id="syncBtn" class="btn primary">Sync Google</button>
+        <button id="refreshBtn" class="btn">Refrescar</button>
+        <button id="changePinBtn" class="btn">Cambiar PIN</button>
+        <button id="clearCacheBtn" class="btn danger">Borrar cache local</button>
+      </div>
+
+      <div class="table">
+        <div class="thead">
+          <div>MONTO</div>
+          <div>RECIBO</div>
+          <div>ACCIÓN</div>
+        </div>
+        <div id="historyBody" class="tbody"></div>
+      </div>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
