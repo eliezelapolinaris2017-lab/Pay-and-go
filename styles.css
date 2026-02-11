@@ -257,3 +257,30 @@ input{
   body::before{ background-size: 360px auto; background-position:center 88%; }
   .form{ grid-template-columns:1fr; }
 }
+/* ===== FIX: QR perfectamente centrado ===== */
+.qrBox{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  border-radius: 24px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.14);
+  overflow: hidden;
+}
+
+.qrBox img{
+  display: block;          /* evita inline baseline offset */
+  margin: 0 auto;          /* centra como bloque */
+  max-width: min(360px, 92vw);
+  width: 100%;
+  height: auto;
+  border-radius: 18px;
+  background: #fff;
+  padding: 12px;           /* marco blanco uniforme */
+  box-sizing: border-box;  /* el padding no “mueve” el centro */
+  object-fit: contain;
+}
+
+/* si hay algún transform accidental heredado */
+#qrImg{ transform: none !important; }
