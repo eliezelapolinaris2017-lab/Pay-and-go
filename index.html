@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nexus POS</title>
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="assets/logo.png" class="logo" alt="Logo" />
+      <div class="brandTxt">
+        <div class="brandName">Nexus POS</div>
+        <div class="brandSub">Método → Registro → QR/Link → Ticket</div>
+      </div>
+    </div>
+
+    <div class="topActions">
+      <button class="btn btnGhost" id="btnHistory">Historial</button>
+    </div>
+  </header>
+
+  <main class="wrap">
+
+    <!-- ===== PANTALLA 1: MÉTODOS ===== -->
+    <section id="screenMethods" class="screen">
+      <div class="screenHead">
+        <h1>Select Payment Method</h1>
+        <p>Selecciona el método. Después registras el cliente y cobras.</p>
+      </div>
+
+      <div id="methodsGrid" class="gridFull"></div>
+    </section>
+
+    <!-- ===== PANTALLA 2: REGISTRO ===== -->
+    <section id="screenRegister" class="screen hidden">
+      <div class="screenHead split">
+        <div>
+          <h1>Registro</h1>
+          <p>Guarda los datos, abre el QR o enlace, y marca pago completado para generar ticket.</p>
+        </div>
+        <div class="rightActions">
+          <button class="btn btnGhost" id="btnBack">← Volver</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="methodBadge" id="methodBadge">Método: —</div>
+
+        <div class="form">
+          <div class="field">
+            <label>Nombre</label>
+            <input id="fName" type="text" placeholder="Ej: José Pérez" />
+          </div>
+
+          <div class="field">
+            <label>Teléfono</label>
+            <input id="fPhone" type="tel" placeholder="Ej: 787-664-3079" />
+          </div>
+
+          <div class="field">
+            <label>Cantidad</label>
+            <input id="fAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Ej: 75.00" />
+          </div>
+
+          <div class="field fieldWide">
+            <label>Nota (opcional)</label>
+            <input id="fNote" type="text" placeholder="Ej: Mantenimiento profundo" />
+          </div>
+        </div>
+
+        <div class="btnRow">
+          <button class="btn btnPrimary" id="btnSave">Guardar</button>
+          <button class="btn btnGhost" id="btnPayLink">Ir a pagar</button>
+          <button class="btn btnOk" id="btnPaid">Pago completado (manual) → Ticket PDF</button>
+        </div>
+
+        <div class="hint" id="regHint">
+          Flujo recomendado: Guardar → Ir a pagar → Pago completado (manual).
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== MODAL HISTORIAL ===== -->
+    <div id="modal" class="modal hidden" aria-hidden="true">
+      <div class="modalCard">
+        <div class="modalHead">
+          <div>
+            <h2>Historial</h2>
+            <p>Se guarda en el dispositivo (localStorage). Exporta o borra cuando quieras.</p>
+          </div>
+          <button class="btn btnGhost" id="btnCloseModal">Cerrar</button>
+        </div>
+
+        <div class="modalActions">
+          <button class="btn btnGhost" id="btnExportCSV">Export CSV</button>
+          <button class="btn btnGhost" id="btnExportJSON">Export JSON</button>
+          <button class="btn btnDanger" id="btnClear">Borrar todo</button>
+        </div>
+
+        <div class="tableWrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Tel</th>
+                <th>Método</th>
+                <th class="r">Cantidad</th>
+                <th>Estado</th>
+                <th class="r">Recibo</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MODAL QR (ATH / STRIPE) ===== -->
+    <div id="qrModal" class="modal hidden" aria-hidden="true">
+      <div class="modalCard" style="max-width:520px">
+        <div class="modalHead">
+          <div>
+            <h2 id="qrTitle">Escanear QR</h2>
+            <p id="qrSub">Abra la app y escanee.</p>
+          </div>
+          <button class="btn btnGhost" id="btnCloseQR">Cerrar</button>
+        </div>
+
+        <div style="padding:14px; display:grid; place-items:center;">
+          <img id="qrImg" src="" alt="QR"
+               style="width:min(390px, 92vw); height:auto; border-radius:18px; background:#fff; padding:12px;">
+        </div>
+
+        <div style="padding:0 14px 14px; color:rgba(255,255,255,.75); font-size:12.5px;">
+          Tip: sube brillo para escaneo rápido.
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ===== FOOTER BRANDING ===== -->
+  <footer class="posFooter" aria-hidden="true">
+    <div class="posFooterInner">
+      <div class="posFooterBrand">Nexus POS</div>
+      <div class="posFooterSub">PAYMENT PLATFORM</div>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
