@@ -35,7 +35,6 @@
         <p>Elige un método para ir al registro.</p>
       </div>
 
-      <!-- Full-screen grid -->
       <div id="methodsGrid" class="gridFull"></div>
     </section>
 
@@ -120,6 +119,28 @@
             </thead>
             <tbody id="historyBody"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MODAL QR (ATH / STRIPE) ===== -->
+    <div id="qrModal" class="modal hidden" aria-hidden="true">
+      <div class="modalCard" style="max-width:520px">
+        <div class="modalHead">
+          <div>
+            <h2 id="qrTitle">Escanear QR</h2>
+            <p id="qrSub">Abra la app y escanee.</p>
+          </div>
+          <button class="btn btnGhost" id="btnCloseQR">Cerrar</button>
+        </div>
+
+        <div style="padding:14px; display:grid; place-items:center;">
+          <img id="qrImg" src="" alt="QR"
+               style="width:min(380px, 92vw); height:auto; border-radius:18px; background:#fff; padding:12px;">
+        </div>
+
+        <div style="padding:0 14px 14px; color:rgba(255,255,255,.75); font-size:12.5px;">
+          Sube el brillo si el escáner está tímido.
         </div>
       </div>
     </div>
