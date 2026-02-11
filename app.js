@@ -1,65 +1,48 @@
-/* =========================================================
-   Nexus POS — app.js (PWA + Firestore + Ticket jsPDF)
-   ========================================================= */
+/********************************************************
+ Nexus POS — Payment Platform
+ RUTAS FIJAS: assets/icons/ (NO CAMBIO CARPETAS)
+*********************************************************/
 
-/* ====== CONFIG ====== */
 const CONFIG = {
-  brand: "Nexus POS",
-  phone: "787-664-3079",
-  location: "Puerto Rico",
-  currency: "USD",
+  brand: {
+    business: "Nexus Payments",
+    phone: "787-664-3079",
+    location: "Puerto Rico"
+  },
 
-  // QR/Link por método (editable)
-  methods: [
-    {
-      id: "stripe",
-      title: "Stripe",
-      subtitle: "Escanear QR",
-      iconImg: "assets/icons/stripe.png",
-      kind: "qr",
-      qrImg: "assets/stripe-qr.png",
-      linkUrl: "" // opcional si quieres abrir link
-    },
-    {
-      id: "ath",
-      title: "ATH Móvil",
-      subtitle: "Escanear QR",
-      iconImg: "assets/icons/ath.png",
-      kind: "qr",
-      qrImg: "assets/ath-qr.png",
-      linkUrl: ""
-    },
-    {
-      id: "tap",
-      title: "Tap to Pay",
-      subtitle: "iPhone (link)",
-      iconImg: "assets/icons/tap.png",
-      kind: "link",
-      linkUrl: "" // pon tu link real si tienes
-    },
-    {
-      id: "cash",
-      title: "Cash",
-      subtitle: "Efectivo",
-      iconImg: "assets/icons/cash.png",
-      kind: "manual"
-    },
-    {
-      id: "checks",
-      title: "Checks",
-      subtitle: "Cheque",
-      iconImg: "assets/icons/checks.png",
-      kind: "manual"
-    }
-  ]
+  links: {
+    tapToPay: "https://example.com/tap-to-pay" // cámbialo si quieres
+  },
+
+  // ✅ Tus iconos están AQUÍ
+  icons: {
+    stripe: "assets/icons/stripe.png",
+    ath: "assets/icons/ath.png",
+    tap: "assets/icons/tap.png",
+    cash: "assets/icons/cash.png",
+    checks: "assets/icons/checks.png"
+  },
+
+  // ✅ QR candidatos SOLO en assets/icons/
+  // Si tienes QR separado, súbelo como:
+  //   assets/icons/stripe-qr.png
+  //   assets/icons/ath-qr.png
+  // Si no existe, usa stripe.png / ath.png como fallback.
+  qrCandidates: {
+    stripe: [
+      "assets/icons/stripe-qr.png",
+      "assets/icons/stripe.png"
+    ],
+    ath: [
+      "assets/icons/ath-qr.png",
+      "assets/icons/ath.png"
+    ]
+  }
 };
 
-/* ====== STORAGE ====== */
-const LS_KEY = "nexuspos_payments_v1";
-
-/* ====== FIREBASE (PEGA TU CONFIG REAL) ====== */
+// ===== Firebase Config (TU PROYECTO) =====
 const firebaseConfig = {
-   apiKey: "AIzaSyAabJd7_zxocAktRlERRv3BHCYpfyiF4ig",
+  apiKey: "AIzaSyAabJd7_zxocAktRlERRv3BHCYpfyiF4ig",
   authDomain: "nexus-payment-platform.firebaseapp.com",
   projectId: "nexus-payment-platform",
   storageBucket: "nexus-payment-platform.firebasestorage.app",
@@ -67,476 +50,399 @@ const firebaseConfig = {
   appId: "1:482375789187:web:e13839db6d644e215009b6"
 };
 
-let db = null;
-let unsubscribeCloud = null;
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
-try{
-  firebase.initializeApp(firebaseConfig);
-  db = firebase.firestore();
-  console.log("Firebase listo ✅");
-}catch(e){
-  console.warn("Firebase no inicializado (usando local):", e);
-}
+// Login anónimo (cero fricción)
+auth.signInAnonymously().catch(console.error);
 
-/* ====== HELPERS ====== */
-const $ = (id) => document.getElementById(id);
-const fmtMoney = (n) => {
-  const v = Number(n || 0);
-  return v.toLocaleString("en-US", { style:"currency", currency: CONFIG.currency });
+// ===== UI refs =====
+const screenMethods = document.getElementById("screenMethods");
+const screenRegister = document.getElementById("screenRegister");
+const screenPay = document.getElementById("screenPay");
+
+const methodsGrid = document.getElementById("methodsGrid");
+const methodBadge = document.getElementById("methodBadge");
+const payBadge = document.getElementById("payBadge");
+
+const payForm = document.getElementById("payForm");
+const nameEl = document.getElementById("name");
+const phoneEl = document.getElementById("phone");
+const amountEl = document.getElementById("amount");
+const noteEl = document.getElementById("note");
+
+const payArea = document.getElementById("payArea");
+const payHint = document.getElementById("payHint");
+
+const btnBack = document.getElementById("btnBack");
+const btnEdit = document.getElementById("btnEdit");
+const btnPaid = document.getElementById("btnPaid");
+
+const btnHistory = document.getElementById("btnHistory");
+const historyModal = document.getElementById("historyModal");
+const btnCloseHistory = document.getElementById("btnCloseHistory");
+const btnRefresh = document.getElementById("btnRefresh");
+const btnClearLocal = document.getElementById("btnClearLocal");
+const historyTableBody = document.querySelector("#historyTable tbody");
+
+// ===== Métodos =====
+const METHODS = [
+  { id:"stripe", label:"Stripe", icon: CONFIG.icons.stripe, mode:"qr" },
+  { id:"ath", label:"ATH Móvil", icon: CONFIG.icons.ath, mode:"qr" },
+  { id:"tap", label:"Tap to Pay", icon: CONFIG.icons.tap, mode:"link", link: CONFIG.links.tapToPay },
+  { id:"cash", label:"Cash", icon: CONFIG.icons.cash, mode:"manual" },
+  { id:"checks", label:"Checks", icon: CONFIG.icons.checks, mode:"manual" },
+];
+
+// ===== State =====
+const state = {
+  method: null,
+  form: { name:"", phone:"", amount:"", note:"" }
 };
-const nowISO = () => new Date().toISOString();
 
-function makeReceiptId(){
-  // R-YYYYMMDD-HHMMSS-XXXX
-  const d = new Date();
-  const pad = (x) => String(x).padStart(2,"0");
-  const y = d.getFullYear();
-  const m = pad(d.getMonth()+1);
-  const day = pad(d.getDate());
-  const hh = pad(d.getHours());
-  const mm = pad(d.getMinutes());
-  const ss = pad(d.getSeconds());
-  const rnd = Math.random().toString(16).slice(2,6).toUpperCase();
-  return `R-${y}${m}${day}-${hh}${mm}${ss}-${rnd}`;
+// ===== Local cache fallback =====
+const LS_KEY = "nexus_pos_payments_cache";
+function getLocalPayments(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||"[]");}catch{return[];} }
+function setLocalPayments(arr){ localStorage.setItem(LS_KEY, JSON.stringify(arr)); }
+function pushLocalPayment(p){ const arr=getLocalPayments(); arr.unshift(p); setLocalPayments(arr); }
+
+// ===== Helpers =====
+function show(el){ el.classList.remove("hidden"); }
+function hide(el){ el.classList.add("hidden"); }
+function go(to){
+  [screenMethods, screenRegister, screenPay].forEach(hide);
+  show(to);
+  window.scrollTo({ top:0, behavior:"smooth" });
+}
+function money(n){ return (Number(n||0)).toFixed(2); }
+function pad2(v){ return String(v).padStart(2,"0"); }
+function nowStamp(){
+  const d=new Date();
+  return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+}
+function receiptNo(){ return `R-${nowStamp()}`; }
+function safeText(s){ return String(s ?? "").trim(); }
+function currentUID(){ return auth.currentUser?.uid || null; }
+
+// ✅ Carga imagen con fallback (no rompe si falta QR)
+function setImgWithFallback(imgEl, candidates, onFail){
+  const list = (candidates || []).map(p => encodeURI(p));
+  let i = 0;
+  const tryNext = () => {
+    if(i >= list.length){
+      if(onFail) onFail();
+      return;
+    }
+    imgEl.src = list[i++];
+  };
+  imgEl.onerror = tryNext;
+  tryNext();
 }
 
-/* ====== LOCAL PAYMENTS ====== */
-function localGet(){
-  return JSON.parse(localStorage.getItem(LS_KEY) || "[]");
-}
-function localSet(arr){
-  localStorage.setItem(LS_KEY, JSON.stringify(arr));
-}
-function localAdd(payment){
-  const arr = localGet();
-  arr.unshift(payment);
-  localSet(arr);
+// ===== Render Métodos (icon-only + nombre abajo) =====
+function renderMethods(){
+  methodsGrid.innerHTML = "";
+  METHODS.forEach(m => {
+    const btn = document.createElement("button");
+    btn.className = "iconBtn";
+    btn.type = "button";
+    btn.innerHTML = `
+      <div class="iconInner">
+        <div class="iconGlass">
+          <img class="iconImg" src="${m.icon}" alt="${m.label}">
+        </div>
+        <div class="iconName">${m.label}</div>
+      </div>
+    `;
+    btn.onclick = () => selectMethod(m.id);
+    methodsGrid.appendChild(btn);
+  });
 }
 
-/* ====== CLOUD SAVE ====== */
-async function saveToCloud(payment){
-  if(!db) return { ok:false, where:"local" };
-  try{
-    const docRef = await db.collection("payments").add({
+function selectMethod(id){
+  state.method = METHODS.find(m => m.id === id);
+  if(!state.method) return;
+
+  methodBadge.textContent = `Método: ${state.method.label}`;
+
+  nameEl.value = "";
+  phoneEl.value = "";
+  amountEl.value = "";
+  noteEl.value = "";
+
+  go(screenRegister);
+}
+
+btnBack.onclick = ()=> go(screenMethods);
+btnEdit.onclick = ()=> go(screenRegister);
+
+// ===== Registro submit =====
+payForm.addEventListener("submit", (e)=>{
+  e.preventDefault();
+
+  state.form.name = safeText(nameEl.value);
+  state.form.phone = safeText(phoneEl.value);
+  state.form.amount = safeText(amountEl.value);
+  state.form.note = safeText(noteEl.value);
+
+  renderPayScreen();
+  go(screenPay);
+});
+
+// ===== Pantalla Cobro =====
+function renderPayScreen(){
+  const m = state.method;
+  const f = state.form;
+
+  payBadge.textContent = `Método: ${m.label} — Total $${money(f.amount)}`;
+  payArea.innerHTML = "";
+  payHint.textContent = "";
+
+  if(m.mode === "qr"){
+    payArea.innerHTML = `
+      <div class="qrBox">
+        <img id="qrImg" alt="QR ${m.label}">
+      </div>
+    `;
+    const img = document.getElementById("qrImg");
+
+    const candidates =
+      m.id === "stripe" ? (CONFIG.qrCandidates.stripe || []) :
+      m.id === "ath" ? (CONFIG.qrCandidates.ath || []) : [];
+
+    setImgWithFallback(img, candidates, () => {
+      payHint.textContent = "No encuentro el QR en assets/icons/. Sube stripe-qr.png o ath-qr.png (o deja los iconos como fallback).";
+    });
+
+    payHint.textContent = "El cliente escanea el QR. Luego confirma y marca “Pago completado (manual)”.";
+  }
+
+  if(m.mode === "link"){
+    payArea.innerHTML = `
+      <div class="linkBox">
+        <div><b>Link:</b></div>
+        <a href="${m.link}" target="_blank" rel="noopener">${m.link}</a>
+        <button class="btn btnPrimary" type="button" id="btnOpenLink">Abrir</button>
+      </div>
+    `;
+    document.getElementById("btnOpenLink").onclick = ()=> window.open(m.link, "_blank");
+    payHint.textContent = "Abre el enlace y confirma manual. Esto es POS práctico.";
+  }
+
+  if(m.mode === "manual"){
+    payArea.innerHTML = `
+      <div class="linkBox">
+        <div><b>Modo manual:</b></div>
+        <div>Marca “Pago completado” cuando recibas el pago.</div>
+      </div>
+    `;
+    payHint.textContent = "Cash/Checks: confirmación manual + ticket para control.";
+  }
+}
+
+// ===== Cloud =====
+async function savePaymentCloud(payment){
+  const uid = currentUID();
+  if(!uid) throw new Error("Auth no disponible.");
+
+  const ref = await db
+    .collection("users").doc(uid)
+    .collection("payments")
+    .add({
       ...payment,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    return { ok:true, where:"cloud", id: docRef.id };
-  }catch(e){
-    console.warn("Cloud save fail -> local only", e);
-    return { ok:false, where:"local" };
+
+  return ref.id;
+}
+
+async function loadPaymentsCloud(limit=60){
+  const uid = currentUID();
+  if(!uid) throw new Error("Auth no disponible.");
+
+  const snap = await db
+    .collection("users").doc(uid)
+    .collection("payments")
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// ===== Ticket tipo tienda (pequeño) =====
+function printReceipt(payment){
+  const { jsPDF } = window.jspdf;
+
+  // ticket 80mm ancho
+  const doc = new jsPDF({ unit:"mm", format:[80, 170] });
+
+  let y = 10;
+  const line = (txt, size=10, bold=false)=>{
+    doc.setFont("courier", bold ? "bold" : "normal");
+    doc.setFontSize(size);
+    doc.text(String(txt).slice(0, 40), 6, y);
+    y += 5;
+  };
+
+  doc.setFont("courier","bold");
+  doc.setFontSize(12);
+  doc.text("RECIBO DE PAGO", 6, y); y += 7;
+
+  line(CONFIG.brand.business, 10, true);
+  line(`Tel: ${CONFIG.brand.phone}`, 9, false);
+  line(CONFIG.brand.location, 9, false);
+  y += 2; line("--------------------------------", 9, false);
+
+  line(`Recibo: ${payment.receiptNo}`, 9, true);
+  line(`Fecha: ${payment.dateText}`, 9, false);
+  y += 1; line("--------------------------------", 9, false);
+
+  line("CLIENTE", 9, true);
+  line(`Nombre: ${payment.customerName}`, 9, false);
+  if(payment.phone) line(`Telefono: ${payment.phone}`, 9, false);
+
+  y += 1; line("--------------------------------", 9, false);
+
+  line("PAGO", 9, true);
+  line(`Metodo: ${payment.method}`, 9, false);
+  line(`Estado: ${payment.status}`, 9, false);
+
+  y += 2;
+  doc.setFont("courier","bold");
+  doc.setFontSize(12);
+  doc.text(`TOTAL: $${money(payment.amount)}`, 6, y); y += 8;
+
+  if(payment.note){
+    line("NOTA", 9, true);
+    line(payment.note, 9, false);
+    y += 2;
   }
+
+  line("--------------------------------", 9, false);
+  line("Gracias por su pago.", 9, false);
+
+  doc.save(`${payment.receiptNo}.pdf`);
 }
 
-/* ====== SYNC LOCAL -> CLOUD ====== */
-async function syncLocalToCloud(){
-  if(!db) return { ok:false, msg:"Firebase no está listo." };
+// ===== Pago completado =====
+btnPaid.onclick = async ()=>{
+  try{
+    const m = state.method;
+    const f = state.form;
 
-  const arr = localGet();
-  const pending = arr.filter(x => x && x._cloud !== true);
+    const payment = {
+      receiptNo: receiptNo(),
+      dateISO: new Date().toISOString(),
+      dateText: new Date().toLocaleString("es-PR"),
+      customerName: f.name,
+      phone: f.phone,
+      method: m.label,
+      amount: Number(f.amount || 0),
+      note: f.note,
+      status: "PAGADO"
+    };
 
-  if(pending.length === 0) return { ok:true, msg:"Nada pendiente." };
+    // cache local primero (offline safe)
+    pushLocalPayment({ ...payment, _local:true });
 
-  let okCount = 0;
-  for(const p of pending){
-    const res = await saveToCloud(p);
-    if(res.ok){
-      okCount++;
-      // marca como subido
-      p._cloud = true;
-      p._cloudId = res.id || null;
-    }
+    // nube (si falla no se cae)
+    try{ await savePaymentCloud(payment); }
+    catch(err){ console.warn("Cloud save failed. Queda en cache local.", err); }
+
+    // ticket
+    printReceipt(payment);
+
+    // vuelta al inicio
+    go(screenMethods);
+
+  }catch(err){
+    alert(err.message || "Error registrando pago");
+  }
+};
+
+// ===== Historial =====
+btnHistory.onclick = async ()=>{
+  show(historyModal);
+  await refreshHistory();
+};
+btnCloseHistory.onclick = ()=> hide(historyModal);
+btnRefresh.onclick = ()=> refreshHistory();
+btnClearLocal.onclick = ()=> { localStorage.removeItem(LS_KEY); refreshHistory(); };
+
+function fmtDate(v){
+  if(!v) return "—";
+  if(typeof v === "string") return new Date(v).toLocaleString("es-PR");
+  if(v.seconds) return new Date(v.seconds*1000).toLocaleString("es-PR");
+  return "—";
+}
+
+async function refreshHistory(){
+  historyTableBody.innerHTML = `<tr><td colspan="6">Cargando...</td></tr>`;
+
+  let rows = [];
+  try{
+    const cloud = await loadPaymentsCloud(60);
+    rows = cloud.map(p => ({
+      id: p.id,
+      date: fmtDate(p.createdAt || p.dateISO),
+      name: p.customerName || "—",
+      method: p.method || "—",
+      amount: p.amount || 0,
+      receipt: p.receiptNo || "—",
+      raw: p
+    }));
+  }catch(err){
+    console.warn("Cloud load failed. Usando cache local.", err);
   }
 
-  // guardar cambios en local
-  localSet(arr);
+  if(rows.length === 0){
+    const local = getLocalPayments();
+    rows = local.slice(0,60).map((p, i)=>({
+      id: `local-${i}`,
+      date: p.dateText || fmtDate(p.dateISO),
+      name: p.customerName || "—",
+      method: p.method || "—",
+      amount: p.amount || 0,
+      receipt: p.receiptNo || "—",
+      raw: p
+    }));
+  }
 
-  return { ok:true, msg:`Sincronizado: ${okCount}/${pending.length}` };
-}
-
-/* ====== CLOUD LISTEN ====== */
-function startCloudListener(onData){
-  if(!db) return;
-  if(unsubscribeCloud) unsubscribeCloud();
-
-  unsubscribeCloud = db.collection("payments")
-    .orderBy("createdAt","desc")
-    .limit(300)
-    .onSnapshot((snap) => {
-      const cloud = [];
-      snap.forEach(doc => {
-        const d = doc.data();
-        cloud.push({ ...d, _cloud:true, _cloudId: doc.id });
-      });
-      onData(cloud);
-    }, (err) => {
-      console.warn("Listener error:", err);
-    });
-}
-
-/* ====== UI STATE ====== */
-let selectedMethod = null;
-let lastPayment = null;
-let cloudCache = []; // data nube
-
-/* ====== RENDER METHODS ====== */
-function renderMethods(){
-  const grid = $("methodsGrid");
-  grid.innerHTML = "";
-
-  CONFIG.methods.forEach((m) => {
-    const btn = document.createElement("button");
-    btn.className = "tileBtn";
-    btn.type = "button";
-
-    btn.innerHTML = `
-      <div class="tileInner">
-        <div class="tileLogoWrap">
-          <img class="tileLogo" src="${m.iconImg}" alt="${m.title}">
-        </div>
-        <div class="tileText">
-          <div class="tileTitle">${m.title}</div>
-          <div class="tileSmall">${m.subtitle}</div>
-        </div>
-      </div>
-    `;
-
-    btn.addEventListener("click", () => {
-      selectedMethod = m;
-      openRegister();
-    });
-
-    grid.appendChild(btn);
-  });
-}
-
-/* ====== NAV ====== */
-function show(el){ el.classList.remove("hidden"); }
-function hide(el){ el.classList.add("hidden"); }
-
-function openRegister(){
-  hide($("screenMethods"));
-  show($("screenRegister"));
-  $("methodBadge").textContent = `Método: ${selectedMethod?.title || "-"}`;
-  $("statusHint").textContent = "Listo.";
-  $("payForm").reset();
-  $("fAmount").value = "75.00";
-  lastPayment = null;
-}
-
-function backToMethods(){
-  hide($("screenRegister"));
-  show($("screenMethods"));
-  lastPayment = null;
-}
-
-/* ====== QR MODAL ====== */
-function openQR(method){
-  if(method.kind === "link" && method.linkUrl){
-    window.open(method.linkUrl, "_blank");
+  if(rows.length === 0){
+    historyTableBody.innerHTML = `<tr><td colspan="6">No hay pagos aún.</td></tr>`;
     return;
   }
 
-  if(method.kind === "qr"){
-    $("qrTitle").textContent = `${method.title} — Escanea para pagar`;
-    $("qrSub").textContent = "Escanea el QR y completa el pago.";
-    $("qrImg").src = method.qrImg;
-    $("qrFoot").textContent = method.linkUrl ? `Link alterno: ${method.linkUrl}` : "";
-    show($("qrModal"));
-  } else {
-    // manual -> no QR
-    $("statusHint").textContent = "Método manual: marca Pago completado cuando cobres.";
-  }
-}
-
-function closeQR(){ hide($("qrModal")); }
-
-/* ====== HISTORIAL (merge nube + local) ====== */
-function mergedHistory(){
-  const local = localGet();
-
-  // estrategia: mostrar nube primero (si existe), y local no-subido separado
-  const cloudIds = new Set(cloudCache.map(x => x._cloudId).filter(Boolean));
-
-  const localPending = local
-    .filter(x => x && x._cloud !== true)
-    .map(x => ({ ...x, _cloud:false, _pending:true }));
-
-  const cloud = cloudCache.map(x => ({ ...x, _cloud:true, _pending:false }));
-
-  // si no hay nube (db off) muestra local completo
-  if(!db) return local.map(x => ({...x, _cloud:false, _pending:(x._cloud!==true)}));
-
-  // merge
-  return [...cloud, ...localPending].slice(0, 400);
-}
-
-function renderHistory(){
-  const tbody = $("histBody");
-  tbody.innerHTML = "";
-
-  const rows = mergedHistory();
-
-  rows.forEach((p) => {
+  historyTableBody.innerHTML = "";
+  rows.forEach(r=>{
     const tr = document.createElement("tr");
-    const dt = p.createdAt?.toDate ? p.createdAt.toDate() : (p.dateISO ? new Date(p.dateISO) : new Date());
-    const dateStr = dt.toLocaleString("es-PR");
-
-    const status = p.status || (p._pending ? "PENDIENTE" : "OK");
-    const id = p.receiptId || p._cloudId || "-";
-
     tr.innerHTML = `
-      <td>${dateStr}</td>
-      <td>${p.method || "-"}</td>
-      <td>${p.name || "-"}</td>
-      <td>${p.phone || "-"}</td>
-      <td>${p.note || ""}</td>
-      <td class="r">${fmtMoney(p.amount)}</td>
-      <td>${status}</td>
-      <td>${id}</td>
+      <td>${r.date}</td>
+      <td>${r.name}</td>
+      <td>${r.method}</td>
+      <td class="r">$${money(r.amount)}</td>
+      <td>${r.receipt}</td>
+      <td><button class="btn btnGhost">Ticket</button></td>
     `;
-
-    tbody.appendChild(tr);
+    tr.querySelector("button").onclick = ()=>{
+      const p = r.raw;
+      const payment = {
+        receiptNo: p.receiptNo || r.receipt,
+        dateText: p.dateText || fmtDate(p.createdAt || p.dateISO),
+        customerName: p.customerName || r.name,
+        phone: p.phone || "",
+        method: p.method || r.method,
+        amount: p.amount || r.amount,
+        note: p.note || "",
+        status: p.status || "PAGADO"
+      };
+      printReceipt(payment);
+    };
+    historyTableBody.appendChild(tr);
   });
 }
 
-/* ====== PDF TICKET (pequeño tipo tienda) ====== */
-async function printTicket(payment){
-  const { jsPDF } = window.jspdf;
-
-  // ticket narrow (80mm aprox) -> jsPDF usa "mm"
-  const doc = new jsPDF({ unit:"mm", format:[80, 150] });
-
-  const x = 6;
-  let y = 10;
-
-  doc.setFont("courier", "bold");
-  doc.setFontSize(12);
-  doc.text(CONFIG.brand.toUpperCase(), x, y); y += 6;
-
-  doc.setFont("courier", "normal");
-  doc.setFontSize(9);
-  doc.text(`Tel: ${CONFIG.phone}`, x, y); y += 5;
-  doc.text(`${CONFIG.location}`, x, y); y += 6;
-
-  doc.setDrawColor(200);
-  doc.line(x, y, 74, y); y += 6;
-
-  const d = new Date();
-  doc.text(`Recibo: ${payment.receiptId}`, x, y); y += 5;
-  doc.text(`Fecha: ${d.toLocaleString("es-PR")}`, x, y); y += 6;
-
-  doc.setFont("courier", "bold");
-  doc.text("CLIENTE", x, y); y += 5;
-  doc.setFont("courier", "normal");
-  doc.text(`${payment.name}`, x, y); y += 5;
-  if(payment.phone) { doc.text(`${payment.phone}`, x, y); y += 5; }
-  if(payment.invoice) { doc.text(`Ref: ${payment.invoice}`, x, y); y += 5; }
-  y += 2;
-
-  doc.setFont("courier", "bold");
-  doc.text("PAGO", x, y); y += 5;
-  doc.setFont("courier", "normal");
-  doc.text(`Método: ${payment.method}`, x, y); y += 5;
-  doc.text(`Estado: ${payment.status}`, x, y); y += 6;
-
-  doc.setFont("courier", "bold");
-  doc.setFontSize(12);
-  doc.text(`TOTAL: ${fmtMoney(payment.amount)}`, x, y); y += 7;
-
-  doc.setFont("courier", "normal");
-  doc.setFontSize(9);
-  if(payment.note){
-    doc.text("Nota:", x, y); y += 5;
-    doc.text(doc.splitTextToSize(payment.note, 66), x, y);
-    y += 10;
-  }
-
-  doc.line(x, y, 74, y); y += 8;
-  doc.text("Gracias por su pago.", x, y);
-
-  doc.save(`${payment.receiptId}.pdf`);
-}
-
-/* ====== EVENTS ====== */
-function bindEvents(){
-  $("btnBack").addEventListener("click", backToMethods);
-
-  $("btnCloseQR").addEventListener("click", closeQR);
-  $("qrModal").addEventListener("click", (e) => {
-    if(e.target === $("qrModal")) closeQR();
-  });
-
-  $("btnHistory").addEventListener("click", () => {
-    show($("histModal"));
-    renderHistory();
-  });
-
-  $("btnCloseHist").addEventListener("click", () => hide($("histModal")));
-  $("histModal").addEventListener("click", (e) => {
-    if(e.target === $("histModal")) hide($("histModal"));
-  });
-
-  $("btnExportCSV").addEventListener("click", exportCSV);
-  $("btnExportJSON").addEventListener("click", exportJSON);
-  $("btnClearLocal").addEventListener("click", () => {
-    if(confirm("¿Borrar historial local?")){
-      localSet([]);
-      renderHistory();
-    }
-  });
-
-  $("btnSync").addEventListener("click", async () => {
-    $("btnSync").disabled = true;
-    const r = await syncLocalToCloud();
-    $("btnSync").disabled = false;
-    alert(r.msg);
-    renderHistory();
-  });
-
-  // Guardar (submit)
-  $("payForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const payment = buildPayment("GUARDADO");
-    lastPayment = payment;
-
-    localAdd(payment);
-    $("statusHint").textContent = "Guardado local ✅ (intentando nube...)";
-
-    const res = await saveToCloud(payment);
-    if(res.ok){
-      markLocalAsCloud(payment.receiptId, res.id);
-      $("statusHint").textContent = "Guardado en nube ✅";
-    }else{
-      $("statusHint").textContent = "Sin internet / nube: quedó en local (pendiente).";
-    }
-  });
-
-  // Ir a pagar
-  $("btnGoPay").addEventListener("click", () => {
-    const draft = buildPayment("PENDIENTE");
-    lastPayment = draft;
-    openQR(selectedMethod);
-  });
-
-  // Pago completado manual + PDF + save
-  $("btnPaid").addEventListener("click", async () => {
-    const payment = buildPayment("PAGADO");
-    lastPayment = payment;
-
-    localAdd(payment);
-    $("statusHint").textContent = "Pago marcado PAGADO. Guardando...";
-
-    const res = await saveToCloud(payment);
-    if(res.ok){
-      markLocalAsCloud(payment.receiptId, res.id);
-      $("statusHint").textContent = "PAGADO ✅ (nube)";
-    }else{
-      $("statusHint").textContent = "PAGADO ✅ (local pendiente de sync)";
-    }
-
-    await printTicket(payment);
-  });
-
-  // Sync automático al volver online
-  window.addEventListener("online", async () => {
-    const r = await syncLocalToCloud();
-    console.log("Sync online:", r);
-  });
-}
-
-/* ====== BUILD PAYMENT ====== */
-function buildPayment(status){
-  const name = $("fName").value.trim();
-  const phone = $("fPhone").value.trim();
-  const amount = parseFloat(String($("fAmount").value).replace(/[^0-9.]/g,"")) || 0;
-  const invoice = $("fInvoice").value.trim();
-  const note = $("fNote").value.trim();
-
-  if(!selectedMethod) throw new Error("No method selected");
-
-  return {
-    receiptId: makeReceiptId(),
-    dateISO: nowISO(),
-    status,
-    method: selectedMethod.title,
-    methodId: selectedMethod.id,
-    name,
-    phone,
-    amount,
-    invoice,
-    note,
-    _cloud: false
-  };
-}
-
-function markLocalAsCloud(receiptId, cloudId){
-  const arr = localGet();
-  const idx = arr.findIndex(x => x && x.receiptId === receiptId);
-  if(idx >= 0){
-    arr[idx]._cloud = true;
-    arr[idx]._cloudId = cloudId || null;
-    localSet(arr);
-  }
-}
-
-/* ====== EXPORTS ====== */
-function downloadFile(filename, content, type){
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportJSON(){
-  const data = mergedHistory();
-  downloadFile(`nexuspos_historial_${Date.now()}.json`, JSON.stringify(data, null, 2), "application/json");
-}
-
-function exportCSV(){
-  const data = mergedHistory();
-  const header = ["fecha","metodo","cliente","telefono","nota","monto","estado","id"];
-  const lines = [header.join(",")];
-
-  data.forEach(p => {
-    const dt = p.createdAt?.toDate ? p.createdAt.toDate() : (p.dateISO ? new Date(p.dateISO) : new Date());
-    const row = [
-      `"${dt.toLocaleString("es-PR")}"`,
-      `"${(p.method||"").replaceAll('"','""')}"`,
-      `"${(p.name||"").replaceAll('"','""')}"`,
-      `"${(p.phone||"").replaceAll('"','""')}"`,
-      `"${(p.note||"").replaceAll('"','""')}"`,
-      `${Number(p.amount||0)}`,
-      `"${(p.status||"").replaceAll('"','""')}"`,
-      `"${(p.receiptId || p._cloudId || "").replaceAll('"','""')}"`
-    ];
-    lines.push(row.join(","));
-  });
-
-  downloadFile(`nexuspos_historial_${Date.now()}.csv`, lines.join("\n"), "text/csv");
-}
-
-/* ====== INIT ====== */
-function init(){
-  renderMethods();
-  bindEvents();
-
-  // Listener nube
-  if(db){
-    startCloudListener((cloud) => {
-      cloudCache = cloud;
-      // si historial abierto, repinta
-      if(!$("histModal").classList.contains("hidden")){
-        renderHistory();
-      }
-    });
-  }
-
-  // intento de sync al arrancar
-  syncLocalToCloud().then(r => console.log("Sync init:", r));
-}
-
-document.addEventListener("DOMContentLoaded", init);
+// ===== Start =====
+renderMethods();
