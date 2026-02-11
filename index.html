@@ -5,144 +5,123 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Plataforma de Pagos</title>
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 
 <body>
   <header class="topbar">
-    <div class="topbar__left">
-      <div class="brand">
-        <img src="assets/logo.png" alt="Logo" class="brand__logo" />
-        <div class="brand__txt">
-          <div class="brand__name">Plataforma de Pagos</div>
-          <div class="brand__sub">Métodos + historial en un solo lugar</div>
-        </div>
+    <div class="brand">
+      <img src="assets/logo.png" class="logo" alt="Logo" />
+      <div class="brandTxt">
+        <div class="brandName">Pagos</div>
+        <div class="brandSub">Selecciona método → registra → recibo</div>
       </div>
     </div>
 
-    <div class="topbar__right">
-      <button class="btn btn--ghost" id="btnResetDemo" title="Resetea totales / demo">Reset</button>
+    <div class="topActions">
+      <button class="btn btnGhost" id="btnHistory">Historial</button>
     </div>
   </header>
 
   <main class="wrap">
-    <!-- Resumen tipo POS -->
-    <section class="summary">
-      <div class="summary__row">
-        <div class="kpi">
-          <div class="kpi__label">Total</div>
-          <div class="kpi__value" id="kpiTotal">$0.00</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi__label">Pagado</div>
-          <div class="kpi__value" id="kpiPaid">$0.00</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi__label">Pendiente</div>
-          <div class="kpi__value" id="kpiDue">$0.00</div>
-        </div>
+
+    <!-- ===== PANTALLA 1: MÉTODOS ===== -->
+    <section id="screenMethods" class="screen">
+      <div class="screenHead">
+        <h1>Select Payment Method</h1>
+        <p>Click en un método para pasar a registro.</p>
       </div>
 
-      <div class="summary__cta">
-        <div class="dueLine">
-          <span class="dueLine__label">Due:</span>
-          <span class="dueLine__value" id="dueBig">$0.00</span>
-        </div>
-      </div>
+      <div id="methodsGrid" class="grid"></div>
     </section>
 
-    <!-- Formulario de pago -->
-    <section class="panel">
-      <div class="panel__head">
-        <h2>Registrar pago</h2>
-        <p>Registra y luego abre el método con 1 click. Si no registras, igual puedes abrir el método (modo “solo cobrar”).</p>
-      </div>
-
-      <div class="form">
-        <div class="field">
-          <label>Nombre del cliente</label>
-          <input id="payName" type="text" placeholder="Ej: Carlos Rivera" />
-        </div>
-
-        <div class="field">
-          <label>Cantidad</label>
-          <input id="payAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Ej: 75.00" />
-        </div>
-
-        <div class="field field--wide">
-          <label>Nota (opcional)</label>
-          <input id="payNote" type="text" placeholder="Ej: Mantenimiento profundo 1 unidad" />
-        </div>
-      </div>
-
-      <div class="hint">
-        Tip: define tus enlaces y etiquetas en <b>app.js</b>. Aquí solo ejecutamos.
-      </div>
-    </section>
-
-    <!-- Métodos -->
-    <section class="panel">
-      <div class="panel__head">
-        <h2>Select Payment Method</h2>
-        <p>Click = abre enlace. “Registrar + Abrir” = guarda en historial y abre.</p>
-      </div>
-
-      <div class="grid" id="methodsGrid">
-        <!-- JS inject -->
-      </div>
-    </section>
-
-    <!-- Historial -->
-    <section class="panel">
-      <div class="panel__head panel__head--split">
+    <!-- ===== PANTALLA 2: REGISTRO ===== -->
+    <section id="screenRegister" class="screen hidden">
+      <div class="screenHead split">
         <div>
-          <h2>Historial de pagos</h2>
-          <p>Guardado local (localStorage). Exporta cuando quieras.</p>
+          <h1>Registro</h1>
+          <p>Guarda los datos y luego completa el pago manualmente.</p>
         </div>
-        <div class="panel__actions">
-          <button class="btn btn--ghost" id="btnExportJSON">Export JSON</button>
-          <button class="btn btn--ghost" id="btnExportCSV">Export CSV</button>
-          <button class="btn btn--danger" id="btnClearHistory">Borrar historial</button>
+        <div class="rightActions">
+          <button class="btn btnGhost" id="btnBack">← Volver</button>
         </div>
       </div>
 
-      <div class="filters">
-        <input id="q" class="input" placeholder="Buscar por nombre / nota / método…" />
-        <select id="methodFilter" class="input">
-          <option value="ALL">Todos los métodos</option>
-        </select>
-        <select id="sortBy" class="input">
-          <option value="newest">Más recientes</option>
-          <option value="oldest">Más antiguos</option>
-          <option value="amount_desc">Mayor cantidad</option>
-          <option value="amount_asc">Menor cantidad</option>
-        </select>
-      </div>
+      <div class="card">
+        <div class="methodBadge" id="methodBadge">Método: —</div>
 
-      <div class="tableWrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Fecha</th>
-              <th>Cliente</th>
-              <th>Método</th>
-              <th class="right">Cantidad</th>
-              <th>Nota</th>
-              <th class="right">Acción</th>
-            </tr>
-          </thead>
-          <tbody id="historyBody">
-            <!-- JS inject -->
-          </tbody>
-        </table>
-      </div>
+        <div class="form">
+          <div class="field">
+            <label>Nombre</label>
+            <input id="fName" type="text" placeholder="Ej: Carlos Rivera" />
+          </div>
 
-      <footer class="footer">
-        <div class="footer__left">
-          <span class="muted">Tip ejecutivo:</span> esto es tu “mini-POS” en GitHub. Simple, directo, sin novela.
+          <div class="field">
+            <label>Teléfono</label>
+            <input id="fPhone" type="tel" placeholder="Ej: 787-000-0000" />
+          </div>
+
+          <div class="field">
+            <label>Cantidad</label>
+            <input id="fAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Ej: 75.00" />
+          </div>
+
+          <div class="field fieldWide">
+            <label>Nota (opcional)</label>
+            <input id="fNote" type="text" placeholder="Ej: Mantenimiento profundo 1 unidad" />
+          </div>
         </div>
-        <div class="footer__right" id="countInfo"></div>
-      </footer>
+
+        <div class="btnRow">
+          <button class="btn btnPrimary" id="btnSave">Guardar</button>
+          <button class="btn btnGhost" id="btnPayLink">Ir a pagar</button>
+          <button class="btn btnOk" id="btnPaid">Pago completado (manual) → Recibo PDF</button>
+        </div>
+
+        <div class="hint" id="regHint">
+          Flujo: Guardar → Ir a pagar → Pago completado (manual).
+        </div>
+      </div>
     </section>
+
+    <!-- ===== MODAL HISTORIAL ===== -->
+    <div id="modal" class="modal hidden">
+      <div class="modalCard">
+        <div class="modalHead">
+          <div>
+            <h2>Historial</h2>
+            <p>LocalStorage. Exporta o borra si quieres.</p>
+          </div>
+          <button class="btn btnGhost" id="btnCloseModal">Cerrar</button>
+        </div>
+
+        <div class="modalActions">
+          <button class="btn btnGhost" id="btnExportCSV">Export CSV</button>
+          <button class="btn btnGhost" id="btnExportJSON">Export JSON</button>
+          <button class="btn btnDanger" id="btnClear">Borrar todo</button>
+        </div>
+
+        <div class="tableWrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Tel</th>
+                <th>Método</th>
+                <th class="r">Cantidad</th>
+                <th>Estado</th>
+                <th class="r">Recibo</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <script src="app.js"></script>
