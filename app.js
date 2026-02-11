@@ -59,12 +59,12 @@ const LS_KEY = "nexuspos_payments_v1";
 
 /* ====== FIREBASE (PEGA TU CONFIG REAL) ====== */
 const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_DOMAIN",
-  projectId: "TU_PROJECT_ID",
-  storageBucket: "TU_BUCKET",
-  messagingSenderId: "TU_SENDER_ID",
-  appId: "TU_APP_ID"
+   apiKey: "AIzaSyAabJd7_zxocAktRlERRv3BHCYpfyiF4ig",
+  authDomain: "nexus-payment-platform.firebaseapp.com",
+  projectId: "nexus-payment-platform",
+  storageBucket: "nexus-payment-platform.firebasestorage.app",
+  messagingSenderId: "482375789187",
+  appId: "1:482375789187:web:e13839db6d644e215009b6"
 };
 
 let db = null;
