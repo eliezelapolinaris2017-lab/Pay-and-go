@@ -33,7 +33,7 @@ const CONFIG = {
     { id:"stripe", name:"Stripe", desc:"Tarjeta / Link", icon:"💳", link:"https://buy.stripe.com/5kQ9AS8nQ2mA6w6aFV1RC0h",
       bg:"linear-gradient(135deg, rgba(140,92,255,.80), rgba(0,0,0,.22))" },
     { id:"ath", name:"ATH Móvil", desc:"PR", icon:"🟠",
-      link:"https://pagos.athmovilapp.com/pagoPorCodigo.html?id=c7995d4c-9a1c-4ab9-8ca9-2561c76b6fc8",
+      link:"https://pagos.athmovilapp.com/pagoPorCodigo.html?id=7ce05653-1f44-4f9d-befe-e3dd812a212b",
       bg:"linear-gradient(135deg, rgba(255,153,0,.85), rgba(0,0,0,.22))" },
     { id:"cash", name:"Cash", desc:"Efectivo", icon:"💵", link:"",
       bg:"linear-gradient(135deg, rgba(40,199,111,.78), rgba(0,0,0,.22))" },
