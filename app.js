@@ -29,9 +29,6 @@ const firebaseConfig = {
   appId: "1:482375789187:web:e13839db6d644e215009b6"
 };
 
-
-Termina el proyecto completo tal cual hasta ahora 
-
 const FIREBASE_ENABLED = !!firebaseConfig && !!firebaseConfig.projectId;
 
 let fb = { app:null, auth:null, db:null, user:null };
