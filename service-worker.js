@@ -1,38 +1,45 @@
-const CACHE = "nexuspos-v1";
+const CACHE_NAME = "nexus-pos-cache-v1";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./manifest.json",
+  "./favicon.ico",
   "./assets/bg.png",
-  "./assets/stripe-qr.png",
-  "./assets/ath-qr.png",
-  "./assets/pwa/icon-192.png",
-  "./assets/pwa/icon-512.png",
-  "./assets/pwa/maskable-192.png",
-  "./assets/pwa/maskable-512.png"
+  "./assets/qr-ath.png",
+  "./assets/qr-stripe.png",
+  "./assets/icons/ath.png",
+  "./assets/icons/stripe.png",
+  "./assets/icons/tap.png",
+  "./assets/icons/cash.png",
+  "./assets/icons/checks.png",
+  "./assets/icons/icon-192.png",
+  "./assets/icons/maskable-192.png"
 ];
 
-self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)));
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", (e) => {
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(k => k !== CACHE ? caches.delete(k) : null)))
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())
   );
-  self.clients.claim();
 });
 
-self.addEventListener("fetch", (e) => {
-  const req = e.request;
-  e.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req).then((res) => {
-      const copy = res.clone();
-      caches.open(CACHE).then((c) => c.put(req, copy));
-      return res;
-    }).catch(() => caches.match("./")))
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then(keys => Promise.all(keys.map(k => (k === CACHE_NAME ? null : caches.delete(k)))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const req = event.request;
+  event.respondWith(
+    fetch(req)
+      .then(res => {
+        const copy = res.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(req, copy)).catch(()=>{});
+        return res;
+      })
+      .catch(() => caches.match(req).then(c => c || caches.match("./index.html")))
   );
 });
