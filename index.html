@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+  <meta name="theme-color" content="#000000"/>
+  <title>Nexus POS — Payment Platform</title>
+
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="stylesheet" href="styles.css"/>
+
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png"/>
+
+  <!-- Firebase v9 compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+
+  <button class="fabHistory" id="btnHistory">Historial</button>
+  <button class="fabSync" id="btnSync">Sync Google</button>
+
+  <main class="wrap">
+
+    <!-- Pantalla 1 -->
+    <section class="screen" id="screenMethods">
+      <div class="screenHead">
+        <h1>Select Payment Method</h1>
+        <p>Selecciona el método. Luego registras el cliente y cobras.</p>
+      </div>
+      <div class="gridIcons" id="methodsGrid"></div>
+    </section>
+
+    <!-- Pantalla 2 -->
+    <section class="screen hidden" id="screenRegister">
+      <div class="screenHead">
+        <h1>Registro</h1>
+        <p>Completa los datos para ticket e historial.</p>
+      </div>
+
+      <div class="card">
+        <div class="methodBadge" id="methodBadge">Método: —</div>
+
+        <form class="form" id="payForm">
+          <div class="field">
+            <label>Nombre</label>
+            <input id="name" required placeholder="Cliente"/>
+          </div>
+
+          <div class="field">
+            <label>Teléfono (opcional)</label>
+            <input id="phone" inputmode="tel" placeholder="787-000-0000"/>
+          </div>
+
+          <div class="field">
+            <label>Monto ($)</label>
+            <input id="amount" type="number" step="0.01" min="0" required placeholder="75.00"/>
+          </div>
+
+          <div class="field">
+            <label>Nota (opcional)</label>
+            <input id="note" placeholder="Ej: Servicio / Referencia"/>
+          </div>
+
+          <div class="fieldWide btnRow">
+            <button class="btn btnGhost" type="button" id="btnBack">Volver</button>
+            <button class="btn btnPrimary" type="submit">Continuar</button>
+          </div>
+        </form>
+
+        <div class="hint">
+          POS operativo: “Pago completado” es manual. El ticket se comparte por Mensajes desde el Share Sheet.
+        </div>
+      </div>
+    </section>
+
+    <!-- Pantalla 3 -->
+    <section class="screen hidden" id="screenPay">
+      <div class="screenHead">
+        <h1>Cobro</h1>
+        <p>Muestra QR o abre enlace. Luego marca “Pago completado”.</p>
+      </div>
+
+      <div class="card">
+        <div class="methodBadge" id="payBadge">Método: —</div>
+
+        <div id="payArea" class="payArea"></div>
+
+        <div class="btnRow">
+          <button class="btn btnGhost" type="button" id="btnEdit">Editar datos</button>
+          <button class="btn btnOk" type="button" id="btnPaid">Pago completado (manual)</button>
+        </div>
+
+        <div class="hint" id="payHint"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="posFooter">
+    <div class="posFooterSub">PAYMENT PLATFORM</div>
+  </footer>
+
+  <!-- Modal Historial -->
+  <div class="modal hidden" id="historyModal">
+    <div class="modalCard">
+      <div class="modalHead">
+        <div>
+          <h2>Historial</h2>
+          <p>Firebase primero. Cache local si estás offline.</p>
+        </div>
+        <button class="btn btnGhost" id="btnCloseHistory">Cerrar</button>
+      </div>
+
+      <div class="modalActions">
+        <button class="btn btnGhost" id="btnRefresh">Refrescar</button>
+        <button class="btn btnDanger" id="btnClearLocal">Borrar cache local</button>
+      </div>
+
+      <div class="tableWrap">
+        <table class="table" id="historyTable">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Método</th>
+              <th class="r">Monto</th>
+              <th>Recibo</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js");
+  </script>
+</body>
+</html>
