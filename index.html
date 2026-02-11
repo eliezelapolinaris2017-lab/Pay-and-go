@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#07070b"/>
+  <title>Nexus POS Express</title>
+
+  <!-- Evita 404 favicon + usa el tuyo -->
+  <link rel="icon" href="assets/icons/favicon.png"/>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <link rel="apple-touch-icon" href="assets/icons/app-icon-192.png"/>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800;900&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="styles.css"/>
+
+  <!-- Firebase v8 -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+</head>
+
+<body>
+  <div class="bg"></div>
+
+  <!-- PIN LOCK -->
+  <div id="pinLock" class="pin-lock hidden">
+    <div class="pin-card">
+      <div class="pin-title">Acceso protegido</div>
+      <div class="pin-sub">Entra tu PIN para abrir Nexus POS Express.</div>
+
+      <div class="pin-input">
+        <input id="pinInput" inputmode="numeric" autocomplete="one-time-code" placeholder="PIN" maxlength="10"/>
+      </div>
+
+      <div class="btn-row">
+        <button id="pinEnterBtn" class="btn primary">Entrar</button>
+      </div>
+
+      <div id="pinHint" class="pin-hint"></div>
+    </div>
+  </div>
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div>
+      <div id="pageTitle" class="h1">Select Payment Method</div>
+      <div id="pageSub" class="sub">Selecciona el método. Luego registras el cliente y cobras.</div>
+    </div>
+    <button id="openHistoryBtn" class="chip">Historial</button>
+  </div>
+
+  <main class="wrap">
+    <!-- HOME -->
+    <section id="viewHome" class="view">
+      <div class="pay-grid" id="payGrid"></div>
+    </section>
+
+    <!-- REGISTRO -->
+    <section id="viewRegistro" class="view hidden">
+      <div class="card glass">
+        <div class="pill" id="pillMetodo">Método: —</div>
+
+        <div class="form">
+          <div>
+            <label>Nombre</label>
+            <input id="inpNombre" placeholder="Cliente"/>
+          </div>
+
+          <div>
+            <label>Teléfono (opcional)</label>
+            <input id="inpTelefono" inputmode="tel" placeholder="787-000-0000"/>
+          </div>
+
+          <div>
+            <label>Monto ($)</label>
+            <input id="inpMonto" inputmode="decimal" placeholder="0.00"/>
+          </div>
+
+          <div>
+            <label>Nota (opcional)</label>
+            <input id="inpNota" placeholder="Ej: Servicio / Referencia"/>
+          </div>
+
+          <div class="btn-row">
+            <button id="btnBackHome" class="btn">Volver</button>
+            <button id="btnToCobro" class="btn primary">Continuar</button>
+          </div>
+
+          <div class="footnote">
+            POS operativo: “Pago completado” es manual. El ticket se comparte por Mensajes desde el Share Sheet.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COBRO -->
+    <section id="viewCobro" class="view hidden">
+      <div class="card glass">
+        <div class="pill" id="pillCobro">Método: —</div>
+
+        <div id="cobroBody"></div>
+
+        <div class="btn-row">
+          <button id="btnEdit" class="btn">Editar datos</button>
+          <button id="btnPaid" class="btn success">Pago completado (manual)</button>
+        </div>
+
+        <div id="cobroHint" class="footnote"></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="footer-brand"></div>
+    <div class="footer-line"></div>
+    <div class="footer-text">PAYMENT PLATFORM</div>
+  </div>
+
+  <!-- HISTORIAL MODAL -->
+  <div id="historyModal" class="modal hidden">
+    <div class="modal-card glass">
+      <div class="modal-top">
+        <div>
+          <div class="modal-title">Historial</div>
+          <div class="modal-sub">Firebase primero. Cache local si estás offline.</div>
+        </div>
+        <button id="btnCloseHistory" class="chip">Cerrar</button>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btnSyncGoogle" class="btn primary" style="flex:0 0 auto;">Sync Google</button>
+        <button id="btnRefreshHistory" class="btn" style="flex:0 0 auto;">Refrescar</button>
+        <button id="btnChangePin" class="btn" style="flex:0 0 auto;">Cambiar PIN</button>
+        <button id="btnClearLocal" class="btn danger" style="flex:0 0 auto;">Borrar cache local</button>
+      </div>
+
+      <div class="table">
+        <div class="thead">
+          <div>MONTO</div>
+          <div>RECIBO</div>
+          <div>ACCIÓN</div>
+        </div>
+        <div id="historyBody" class="tbody"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
