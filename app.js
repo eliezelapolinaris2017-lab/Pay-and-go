@@ -1,73 +1,30 @@
-/*************************************************
- * Nexus POS — Pagos
- * - Tiles grandes full-screen
- * - ATH QR + Stripe QR (modal)
- * - Ticket POS con jsPDF
- * - Historial localStorage
- *************************************************/
-
 const $ = (s) => document.querySelector(s);
-const STORE_KEY = "NEXUS_POS_HISTORY_V1";
+const STORE_KEY = "NEXUS_POS_HISTORY_V3";
 
 const CONFIG = {
   business: {
-    name: "Oasis / Nexus Payments",
+    name: "Nexus POS",
     phone: "787-664-3079",
     address: "Puerto Rico",
     receiptTitle: "RECIBO DE PAGO",
-    ticket: {
-      widthPt: 227,     // 80mm aprox (164 = 58mm)
-      marginPt: 14,
-      lineHeight: 12,
-      fontSize: 10,
-      footer: "Gracias por su pago."
-    }
+    ticket: { widthPt: 227, marginPt: 14, lineHeight: 12, fontSize: 10, footer: "Gracias por su pago." }
   },
   currency: "USD",
   methods: [
-    {
-      id:"stripe",
-      name:"Stripe",
-      desc:"Escanear QR",
-      icon:"💳",
-      action:"qr",
-      qrImage:"assets/stripe-qr.png",
-      bg:"linear-gradient(135deg, rgba(140,92,255,.85), rgba(0,0,0,.22))"
-    },
-    {
-      id:"ath",
-      name:"ATH Móvil",
-      desc:"Escanear QR",
-      icon:"🟠",
-      action:"qr",
-      qrImage:"assets/ath-qr.png",
-      bg:"linear-gradient(135deg, rgba(255,153,0,.85), rgba(0,0,0,.22))"
-    },
-    {
-      id:"tap",
-      name:"Tap to Pay",
-      desc:"iPhone (link)",
-      icon:"📲",
-      action:"link",
-      link:"https://example.com/tap",
-      bg:"linear-gradient(135deg, rgba(47,122,246,.80), rgba(0,0,0,.22))"
-    },
-    {
-      id:"cash",
-      name:"Cash",
-      desc:"Efectivo",
-      icon:"💵",
-      action:"none",
-      bg:"linear-gradient(135deg, rgba(40,199,111,.78), rgba(0,0,0,.22))"
-    },
-    {
-      id:"check",
-      name:"Checks",
-      desc:"Cheque",
-      icon:"🧾",
-      action:"none",
-      bg:"linear-gradient(135deg, rgba(214,178,94,.82), rgba(0,0,0,.22))"
-    }
+    { id:"stripe", name:"Stripe", desc:"Escanear QR", iconImg:"assets/icons/stripe.png", action:"qr", qrImage:"assets/stripe-qr.png",
+      bg:"linear-gradient(135deg, rgba(140,92,255,.65), rgba(0,0,0,.25))" },
+
+    { id:"ath", name:"ATH Móvil", desc:"Escanear QR", iconImg:"assets/icons/ath.png", action:"qr", qrImage:"assets/ath-qr.png",
+      bg:"linear-gradient(135deg, rgba(255,153,0,.55), rgba(0,0,0,.25))" },
+
+    { id:"tap", name:"Tap to Pay", desc:"iPhone (link)", iconImg:"assets/icons/tap.png", action:"link", link:"https://example.com/tap",
+      bg:"linear-gradient(135deg, rgba(47,122,246,.55), rgba(0,0,0,.25))" },
+
+    { id:"cash", name:"Cash", desc:"Efectivo", iconImg:"assets/icons/cash.png", action:"none",
+      bg:"linear-gradient(135deg, rgba(40,199,111,.50), rgba(0,0,0,.25))" },
+
+    { id:"check", name:"Checks", desc:"Cheque", iconImg:"assets/icons/checks.png", action:"none",
+      bg:"linear-gradient(135deg, rgba(214,178,94,.48), rgba(0,0,0,.25))" }
   ]
 };
 
@@ -100,9 +57,7 @@ function bindUI(){
   $("#btnClear").addEventListener("click", clearAll);
 
   ["fName","fPhone","fAmount","fNote"].forEach(id=>{
-    $("#"+id).addEventListener("keydown",(e)=>{
-      if(e.key==="Enter") saveDraft();
-    });
+    $("#"+id).addEventListener("keydown",(e)=>{ if(e.key==="Enter") saveDraft(); });
   });
 }
 
@@ -137,12 +92,21 @@ function renderMethods(){
     const btn = document.createElement("button");
     btn.className = "tileBtn";
     btn.type = "button";
-    btn.style.background = m.bg || "linear-gradient(135deg, rgba(47,122,246,.70), rgba(0,0,0,.25))";
+    btn.style.background = m.bg;
+
     btn.innerHTML = `
-      <div class="tileIcon">${escapeHTML(m.icon || "💳")}</div>
-      <div class="tileTitle">${escapeHTML(m.name)}</div>
-      <div class="tileSmall">${escapeHTML(m.desc || "")}</div>
+      <div class="tileTopGlow"></div>
+      <div class="tileInner">
+        <div class="tileLogoWrap">
+          <img class="tileLogo" src="${m.iconImg}" alt="${escapeHTML(m.name)}" onerror="this.style.display='none'">
+        </div>
+        <div class="tileText">
+          <div class="tileTitle">${escapeHTML(m.name)}</div>
+          <div class="tileSmall">${escapeHTML(m.desc || "")}</div>
+        </div>
+      </div>
     `;
+
     btn.addEventListener("click", () => gotoRegister(m));
     grid.appendChild(btn);
   });
@@ -171,10 +135,7 @@ function saveDraft(){
     methodAction: method.action || "link",
     methodLink: method.link || "",
     methodQrImage: method.qrImage || "",
-    name,
-    phone,
-    amount,
-    note,
+    name, phone, amount, note,
     paidAt: null,
     receiptNo: null
   };
@@ -198,11 +159,8 @@ function openSelectedPay(){
   }
 
   if (action === "link") {
-    if (method.link && method.link.trim()) {
-      window.open(method.link, "_blank", "noopener,noreferrer");
-    } else {
-      toast("Método sin enlace configurado.");
-    }
+    if (method.link && method.link.trim()) window.open(method.link, "_blank", "noopener,noreferrer");
+    else toast("Método sin enlace configurado.");
     return;
   }
 
@@ -287,6 +245,7 @@ function exportJSON(){
   const payload = { exportedAt: new Date().toISOString(), currency: CONFIG.currency, history: state.history };
   downloadFile(`historial_pagos_${todayStamp()}.json`, JSON.stringify(payload, null, 2), "application/json");
 }
+
 function exportCSV(){
   const headers = ["Fecha","Cliente","Telefono","Metodo","Cantidad","Estado","Recibo"];
   const lines = [headers.join(",")];
@@ -386,6 +345,7 @@ function wrapText(text, maxWidthPt, fontSize){
   d.setFontSize(fontSize);
   return d.splitTextToSize(text, maxWidthPt);
 }
+
 function centerText(t, widthChars){
   const s = String(t || "");
   if (s.length >= widthChars) return s.slice(0, widthChars);
@@ -462,7 +422,7 @@ function toast(msg){
   t.textContent = msg;
   t.style.position="fixed";
   t.style.left="50%";
-  t.style.bottom="130px"; /* arriba del footer */
+  t.style.bottom="130px";
   t.style.transform="translateX(-50%)";
   t.style.padding="10px 12px";
   t.style.borderRadius="12px";
