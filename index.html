@@ -3,13 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Nexus POS Express</title>
+  <title>Nexus POS</title>
+
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <link rel="apple-touch-icon" href="assets/pwa/icon-192.png">
+
+  <!-- jsPDF -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- Firebase (Firestore) compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 </head>
 
 <body>
-  <!-- Botón flotante Historial -->
+  <!-- Historial flotante -->
   <button class="fabHistory" id="btnHistory" type="button">Historial</button>
 
   <main class="wrap">
@@ -28,107 +40,111 @@
       <div class="screenHead split">
         <div>
           <h1>Registro</h1>
-          <p>Guardar → Ir a pagar → Pago completado → Ticket PDF.</p>
+          <p>Guardar → Ir a pagar → Pago completado (manual) → Ticket PDF.</p>
         </div>
-
-        <div class="rightActions">
+        <div>
           <button class="btn btnGhost" id="btnBack" type="button">← Volver</button>
         </div>
       </div>
 
       <div class="card">
-        <div class="methodBadge" id="methodBadge">Método: —</div>
+        <div class="methodBadge" id="methodBadge">Método</div>
 
-        <div class="form">
+        <form id="payForm" class="form">
           <div class="field">
-            <label>Nombre</label>
-            <input id="fName" type="text" placeholder="Ej: José Pérez" autocomplete="name" />
+            <label>Nombre *</label>
+            <input id="fName" required placeholder="Nombre y apellido" autocomplete="name">
           </div>
 
           <div class="field">
             <label>Teléfono</label>
-            <input id="fPhone" type="tel" placeholder="Ej: 787-664-3079" autocomplete="tel" />
+            <input id="fPhone" placeholder="787-000-0000" inputmode="tel">
           </div>
 
           <div class="field">
-            <label>Cantidad</label>
-            <input id="fAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Ej: 75.00" />
+            <label>Monto *</label>
+            <input id="fAmount" required placeholder="75.00" inputmode="decimal">
+          </div>
+
+          <div class="field">
+            <label>Referencia / Factura</label>
+            <input id="fInvoice" placeholder="Opcional">
           </div>
 
           <div class="field fieldWide">
-            <label>Nota (opcional)</label>
-            <input id="fNote" type="text" placeholder="Ej: Mantenimiento profundo" />
+            <label>Nota</label>
+            <input id="fNote" placeholder="Ej: mantenimiento profundo">
           </div>
-        </div>
 
-        <div class="btnRow">
-          <button class="btn btnPrimary" id="btnSave" type="button">Guardar</button>
-          <button class="btn btnGhost" id="btnPayLink" type="button">Ir a pagar</button>
-          <button class="btn btnOk" id="btnPaid" type="button">Pago completado (manual) → Ticket PDF</button>
-        </div>
-
-        <div class="hint" id="regHint">Flujo: Guardar → Ir a pagar → Pago completado (manual).</div>
+          <div class="field fieldWide">
+            <div class="btnRow">
+              <button class="btn btnPrimary" id="btnSave" type="submit">Guardar</button>
+              <button class="btn" id="btnGoPay" type="button">Ir a pagar</button>
+              <button class="btn btnOk" id="btnPaid" type="button">Pago completado (manual)</button>
+            </div>
+            <div class="hint" id="statusHint">Listo.</div>
+          </div>
+        </form>
       </div>
     </section>
-
-    <!-- ===== MODAL HISTORIAL ===== -->
-    <div id="modal" class="modal hidden" aria-hidden="true">
-      <div class="modalCard">
-        <div class="modalHead">
-          <div>
-            <h2>Historial</h2>
-            <p>Se guarda local en el dispositivo (localStorage).</p>
-          </div>
-          <button class="btn btnGhost" id="btnCloseModal" type="button">Cerrar</button>
-        </div>
-
-        <div class="modalActions">
-          <button class="btn btnGhost" id="btnExportCSV" type="button">Export CSV</button>
-          <button class="btn btnGhost" id="btnExportJSON" type="button">Export JSON</button>
-          <button class="btn btnDanger" id="btnClear" type="button">Borrar todo</button>
-        </div>
-
-        <div class="tableWrap">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Cliente</th>
-                <th>Tel</th>
-                <th>Método</th>
-                <th class="r">Cantidad</th>
-                <th>Estado</th>
-                <th class="r">Recibo</th>
-              </tr>
-            </thead>
-            <tbody id="historyBody"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===== MODAL QR ===== -->
-    <div id="qrModal" class="modal hidden" aria-hidden="true">
-      <div class="modalCard" style="max-width:520px">
-        <div class="modalHead">
-          <div>
-            <h2 id="qrTitle">Escanear QR</h2>
-            <p id="qrSub">Abra la app y escanee.</p>
-          </div>
-          <button class="btn btnGhost" id="btnCloseQR" type="button">Cerrar</button>
-        </div>
-
-        <div class="qrBody">
-          <img id="qrImg" src="" alt="QR">
-        </div>
-
-        <div class="qrFoot">Tip: sube brillo para escaneo rápido.</div>
-      </div>
-    </div>
-
   </main>
 
-  <!-- Footer branding opcional (si no lo quieres, bórralo) -->
+  <!-- ===== MODAL: QR / LINK ===== -->
+  <div class="modal hidden" id="qrModal" role="dialog" aria-modal="true">
+    <div class="modalCard">
+      <div class="modalHead">
+        <div>
+          <h2 id="qrTitle">Escanea para pagar</h2>
+          <p id="qrSub">Usa la cámara del teléfono y completa el pago.</p>
+        </div>
+        <button class="btn btnGhost" id="btnCloseQR" type="button">Cerrar</button>
+      </div>
+      <div class="qrBody">
+        <img id="qrImg" alt="QR de pago">
+      </div>
+      <div class="qrFoot" id="qrFoot"></div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL: HISTORIAL ===== -->
+  <div class="modal hidden" id="histModal" role="dialog" aria-modal="true">
+    <div class="modalCard">
+      <div class="modalHead">
+        <div>
+          <h2>Historial (Nube + Local)</h2>
+          <p>Si estás offline, verás local; cuando vuelva internet, sincroniza.</p>
+        </div>
+        <button class="btn btnGhost" id="btnCloseHist" type="button">Cerrar</button>
+      </div>
+
+      <div class="modalActions">
+        <button class="btn" id="btnSync" type="button">Sincronizar ahora</button>
+        <button class="btn" id="btnExportCSV" type="button">Export CSV</button>
+        <button class="btn" id="btnExportJSON" type="button">Export JSON</button>
+        <button class="btn btnDanger" id="btnClearLocal" type="button">Borrar Local</button>
+      </div>
+
+      <div class="tableWrap">
+        <table class="table" id="histTable">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Método</th>
+              <th>Cliente</th>
+              <th>Tel</th>
+              <th>Nota</th>
+              <th class="r">Monto</th>
+              <th>Estado</th>
+              <th>ID</th>
+            </tr>
+          </thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer SOLO texto -->
   <footer class="posFooter" aria-hidden="true">
     <div class="posFooterInner">
       <div class="posFooterSub">PAYMENT PLATFORM</div>
@@ -136,5 +152,12 @@
   </footer>
 
   <script src="app.js"></script>
+
+  <!-- Service Worker -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./service-worker.js");
+    }
+  </script>
 </body>
 </html>
