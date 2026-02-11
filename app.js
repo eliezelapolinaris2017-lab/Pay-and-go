@@ -1,15 +1,15 @@
+/* app.js */
 /*************************************************
- * Plataforma Pagos — 2 pantallas
- * 1) Métodos (iconos)
- * 2) Registro (nombre/teléfono/etc) + link + pago completado
- * Recibo PDF: jsPDF
+ * Plataforma Pagos — 2 pantallas (botones grandes)
+ * 1) Métodos (full-screen tiles)
+ * 2) Registro + link + pago completado manual + recibo jsPDF
  *************************************************/
 
 const $ = (s) => document.querySelector(s);
 
-const STORE_KEY = "PAY_PLATFORM_V2_HISTORY";
+const STORE_KEY = "PAY_PLATFORM_V3_HISTORY";
 
-/* ===== CONFIG EDITABLE (links, métodos, branding) ===== */
+/* ===== CONFIG EDITABLE ===== */
 const CONFIG = {
   business: {
     name: "Oasis / Nexus Payments",
@@ -19,12 +19,48 @@ const CONFIG = {
   },
   currency: "USD",
 
+  // Edita links + colores aquí
   methods: [
-    { id:"tap",    name:"Tap to Pay",      desc:"Cobro rápido desde iPhone.", icon:"📲", link:"https://example.com/tap" },
-    { id:"stripe", name:"Stripe",          desc:"Tarjeta / checkout / link.",  icon:"💳", link:"https://example.com/stripe" },
-    { id:"ath",    name:"ATH Móvil",       desc:"Pago local PR.",              icon:"🟠", link:"https://pagos.athmovilapp.com/pagoPorCodigo.html?id=CAMBIA-ESTE-ID" },
-    { id:"cash",   name:"Cash",            desc:"Efectivo.",                   icon:"💵", link:"" },
-    { id:"check",  name:"Checks",          desc:"Cheque.",                     icon:"🧾", link:"" }
+    {
+      id:"tap",
+      name:"Tap to Pay",
+      desc:"iPhone",
+      icon:"📲",
+      link:"https://example.com/tap",
+      bg:"linear-gradient(135deg, rgba(47,122,246,.80), rgba(0,0,0,.22))"
+    },
+    {
+      id:"stripe",
+      name:"Stripe",
+      desc:"Tarjeta / Link",
+      icon:"💳",
+      link:"https://example.com/stripe",
+      bg:"linear-gradient(135deg, rgba(140,92,255,.80), rgba(0,0,0,.22))"
+    },
+    {
+      id:"ath",
+      name:"ATH Móvil",
+      desc:"PR",
+      icon:"🟠",
+      link:"https://pagos.athmovilapp.com/pagoPorCodigo.html?id=CAMBIA-ESTE-ID",
+      bg:"linear-gradient(135deg, rgba(255,153,0,.85), rgba(0,0,0,.22))"
+    },
+    {
+      id:"cash",
+      name:"Cash",
+      desc:"Efectivo",
+      icon:"💵",
+      link:"",
+      bg:"linear-gradient(135deg, rgba(40,199,111,.78), rgba(0,0,0,.22))"
+    },
+    {
+      id:"check",
+      name:"Checks",
+      desc:"Cheque",
+      icon:"🧾",
+      link:"",
+      bg:"linear-gradient(135deg, rgba(214,178,94,.82), rgba(0,0,0,.22))"
+    }
   ]
 };
 
@@ -42,7 +78,7 @@ renderHistoryTable();
 
 /* ================= UI ================= */
 function bindUI(){
-  $("#btnBack").addEventListener("click", () => gotoMethods());
+  $("#btnBack").addEventListener("click", gotoMethods);
   $("#btnSave").addEventListener("click", saveDraft);
   $("#btnPayLink").addEventListener("click", openSelectedPayLink);
   $("#btnPaid").addEventListener("click", markPaidAndReceipt);
@@ -54,6 +90,14 @@ function bindUI(){
   $("#btnExportJSON").addEventListener("click", exportJSON);
   $("#btnExportCSV").addEventListener("click", exportCSV);
   $("#btnClear").addEventListener("click", clearAll);
+
+  // Enter: guardar
+  ["fName","fPhone","fAmount","fNote"].forEach(id=>{
+    const el = $("#"+id);
+    el.addEventListener("keydown",(e)=>{
+      if(e.key==="Enter") saveDraft();
+    });
+  });
 }
 
 /* ===== Screen nav ===== */
@@ -61,40 +105,42 @@ function gotoRegister(method){
   state.selectedMethod = method;
   $("#methodBadge").textContent = `Método: ${method.name}`;
 
-  // reset draft/form
   state.draft = null;
   $("#fName").value = "";
   $("#fPhone").value = "";
   $("#fAmount").value = "";
   $("#fNote").value = "";
-  $("#regHint").textContent = "Flujo: Guardar → Ir a pagar → Pago completado (manual).";
+  $("#regHint").textContent = "Flujo recomendado: Guardar → Ir a pagar → Pago completado (manual).";
 
   $("#screenMethods").classList.add("hidden");
   $("#screenRegister").classList.remove("hidden");
+  window.scrollTo({top:0, behavior:"smooth"});
 }
 
 function gotoMethods(){
   $("#screenRegister").classList.add("hidden");
   $("#screenMethods").classList.remove("hidden");
+  window.scrollTo({top:0, behavior:"smooth"});
 }
 
-/* ===== Methods grid ===== */
+/* ===== Methods grid (botones gigantes) ===== */
 function renderMethods(){
   const grid = $("#methodsGrid");
   grid.innerHTML = "";
 
   CONFIG.methods.forEach(m => {
-    const tile = document.createElement("div");
-    tile.className = "tile";
-    tile.innerHTML = `
-      <div class="icon">${escapeHTML(m.icon || "💳")}</div>
-      <div>
-        <div class="tileTitle">${escapeHTML(m.name)}</div>
-        <div class="tileDesc">${escapeHTML(m.desc || "")}</div>
-      </div>
+    const btn = document.createElement("button");
+    btn.className = "tileBtn";
+    btn.type = "button";
+    btn.style.background = m.bg || "linear-gradient(135deg, rgba(47,122,246,.70), rgba(0,0,0,.25))";
+
+    btn.innerHTML = `
+      <div class="tileIcon">${escapeHTML(m.icon || "💳")}</div>
+      <div class="tileTitle">${escapeHTML(m.name)}</div>
+      <div class="tileSmall">${escapeHTML(m.desc || "")}</div>
     `;
-    tile.addEventListener("click", () => gotoRegister(m));
-    grid.appendChild(tile);
+    btn.addEventListener("click", () => gotoRegister(m));
+    grid.appendChild(btn);
   });
 }
 
@@ -129,7 +175,7 @@ function saveDraft(){
     receiptNo: null
   };
 
-  $("#regHint").textContent = "Guardado. Ahora: Ir a pagar → luego Pago completado (manual) para generar recibo.";
+  $("#regHint").textContent = "Guardado ✅ Ahora: Ir a pagar → luego Pago completado (manual) para generar recibo.";
   toast("Guardado ✅");
 }
 
@@ -139,8 +185,7 @@ function openSelectedPayLink(){
   if (!method) return toast("No hay método seleccionado.");
 
   if (!state.draft) {
-    // permitimos abrir sin guardar, pero lo decimos claro
-    toast("Abriendo enlace. Recomendación: guarda primero para tener historial.");
+    toast("Abriendo enlace. Recomendación: guarda primero para historial.");
   }
 
   if (method.link && method.link.trim()) {
@@ -155,23 +200,19 @@ function markPaidAndReceipt(){
   if (!state.draft) return toast("Primero: Guardar el registro.");
 
   const record = { ...state.draft };
-
-  // marca pagado
   record.status = "PAID";
   record.paidAt = Date.now();
   record.receiptNo = makeReceiptNo(record.paidAt);
 
-  // guarda historial
   state.history.unshift(record);
   saveHistory();
 
-  // genera PDF
   generateReceiptPDF(record);
 
-  // UI
   state.draft = null;
   renderHistoryTable();
-  $("#regHint").textContent = "Pago registrado y recibo generado. Puedes volver y procesar otro pago.";
+
+  $("#regHint").textContent = "Pago registrado + recibo generado. Vuelve para otro cobro.";
   toast("Pago completado + Recibo ✅");
 }
 
@@ -183,7 +224,6 @@ function generateReceiptPDF(r){
   const left = 44;
   let y = 52;
 
-  // header
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.text(CONFIG.business.receiptTitle, left, y);
@@ -197,20 +237,18 @@ function generateReceiptPDF(r){
   y += 14;
   doc.text(`${CONFIG.business.address}`, left, y);
 
-  // line
   y += 18;
   doc.setDrawColor(180);
   doc.line(left, y, 568, y);
 
-  // receipt meta
   y += 22;
   doc.setFont("helvetica", "bold");
   doc.text(`Recibo #: ${r.receiptNo}`, left, y);
+
   doc.setFont("helvetica", "normal");
   y += 14;
   doc.text(`Fecha: ${fmtDateTime(r.paidAt)}`, left, y);
 
-  // client
   y += 18;
   doc.setFont("helvetica", "bold");
   doc.text("Cliente", left, y);
@@ -220,7 +258,6 @@ function generateReceiptPDF(r){
   y += 14;
   doc.text(`Teléfono: ${r.phone}`, left, y);
 
-  // payment
   y += 18;
   doc.setFont("helvetica", "bold");
   doc.text("Pago", left, y);
@@ -235,7 +272,6 @@ function generateReceiptPDF(r){
   doc.setFontSize(14);
   doc.text(`Total: ${fmtMoney(r.amount)}`, left, y);
 
-  // note
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
   if (r.note && r.note.trim()){
@@ -247,17 +283,12 @@ function generateReceiptPDF(r){
     doc.text(doc.splitTextToSize(r.note, 520), left, y);
   }
 
-  // footer
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(120);
   doc.text("Gracias por su pago.", left, 742);
 
-  // auto open print dialog? (no siempre funciona en iOS)
-  // doc.autoPrint();
-
-  const fileName = `Recibo_${r.receiptNo}.pdf`;
-  doc.save(fileName);
+  doc.save(`Recibo_${r.receiptNo}.pdf`);
 }
 
 /* ================= HISTORIAL ================= */
@@ -401,7 +432,7 @@ function toast(msg){
   t.style.background="rgba(0,0,0,.75)";
   t.style.border="1px solid rgba(255,255,255,.15)";
   t.style.color="white";
-  t.style.fontWeight="900";
+  t.style.fontWeight="1000";
   t.style.zIndex="9999";
   t.style.backdropFilter="blur(10px)";
   document.body.appendChild(t);
