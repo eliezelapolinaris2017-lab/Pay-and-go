@@ -2,15 +2,12 @@
   --bg:#000;
   --text:rgba(255,255,255,.94);
   --muted:rgba(255,255,255,.70);
-
-  --shadow2: 0 18px 60px rgba(0,0,0,.65);
   --font: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial;
-  --max: 1180px;
+  --shadow2: 0 18px 60px rgba(0,0,0,.65);
 
-  /* 🔥 icon-only */
-  --iconBtn: 88px;       /* tamaño del “icon button” */
-  --iconImg: 60px;       /* tamaño del PNG dentro */
-  --iconRadius: 26px;    /* redondeo */
+  --iconBtn: 92px;
+  --iconImg: 66px;
+  --iconRadius: 26px;
 }
 
 *{box-sizing:border-box}
@@ -26,19 +23,19 @@ body{
   position:relative;
 }
 
-/* ===== Branding bg.png (abajo, centrado, NO invade) ===== */
+/* ✅ Tu branding bg.png abajo */
 body::before{
   content:"";
   position:fixed;
   inset:0;
-  background: url("assets/bg.png") center 86% / 430px auto no-repeat;
-  opacity:.90;
+  background: url("assets/bg.png") center 86% / 420px auto no-repeat;
+  opacity:.88;
   filter:saturate(1.15) contrast(1.08);
   z-index:-3;
   pointer-events:none;
 }
 
-/* ===== Glow Nexus ===== */
+/* Glow elegante */
 body::after{
   content:"";
   position:fixed;
@@ -51,145 +48,96 @@ body::after{
   pointer-events:none;
 }
 
-/* ===== Layout ===== */
 .wrap{
-  max-width:var(--max);
+  max-width: 980px;
   margin:0 auto;
-  padding: 22px 14px 150px; /* deja espacio para footer */
+  padding: 22px 14px 140px;
 }
+
 .hidden{display:none !important}
 
-.screenHead{
-  padding: 10px 2px 8px;
-}
-.screenHead h1{
-  margin:0;
-  font-size:20px;
-  font-weight:1000;
-  text-shadow: 0 14px 40px rgba(0,0,0,.65);
-}
-.screenHead p{
-  margin:6px 0 0;
-  color:var(--muted);
-  font-size:13px;
-  line-height:1.35;
-}
+.screenHead{padding:10px 2px 8px;}
+.screenHead h1{margin:0;font-size:20px;font-weight:1000;text-shadow:0 14px 40px rgba(0,0,0,.65);}
+.screenHead p{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.35;}
 
 /* Historial flotante */
 .fabHistory{
-  position:fixed;
-  top:16px;
-  right:16px;
-  z-index:40;
-  padding:12px 16px;
-  border-radius:999px;
+  position:fixed; top:16px; right:16px; z-index:40;
+  padding:12px 16px; border-radius:999px;
   border:1px solid rgba(255,255,255,.18);
   background: rgba(255,255,255,.08);
-  color:var(--text);
-  font-weight:1000;
+  color:var(--text); font-weight:1000;
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow2), inset 0 1px 0 rgba(255,255,255,.10);
   cursor:pointer;
 }
 
-/* =====================================================
-   GRID ICON-ONLY (arriba) — NO TAPA EL BRANDING
-   ===================================================== */
-.gridFull{
+/* ✅ Grid de iconos (no tapa branding) */
+.gridIcons{
   display:grid;
-  gap: 18px 18px;
-
-  /* 4 columnas en iPhone */
+  gap: 18px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-
-  /* pega el bloque arriba y evita que baje demasiado */
-  align-content:start;
-  justify-content:center;
-
-  /* limita el ancho para que el grid se vea “pro” */
-  max-width: 520px;
-
-  /* 👇 esto es lo que evita tapar el logo de fondo */
+  max-width: 560px;
   margin-top: 14px;
-  margin-bottom: 120px; /* deja aire antes del branding */
+  margin-bottom: 170px; /* deja espacio para el logo de fondo */
 }
 
-/* ===== Botón = SOLO ICONO ===== */
-.tileBtn{
-  background: transparent;
-  border: none;
-  box-shadow: none;
+/* Icon-only botón */
+.iconBtn{
+  border:none;
+  background:transparent;
   padding:0;
-  cursor:pointer;
   width:100%;
+  cursor:pointer;
 }
 
-/* centra icon + texto */
-.tileInner{
+.iconInner{
   display:flex;
   flex-direction:column;
   align-items:center;
-  justify-content:flex-start;
   gap:10px;
-  padding:0;
 }
 
-/* el “icon button” (lo único clickeable visual) */
-.tileLogoWrap{
+.iconGlass{
   width: var(--iconBtn);
   height: var(--iconBtn);
   border-radius: var(--iconRadius);
+  display:grid;
+  place-items:center;
 
   background:
     radial-gradient(110px 110px at 35% 25%, rgba(255,255,255,.18), transparent 60%),
     linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
-
   border: 1px solid rgba(255,255,255,.18);
-  box-shadow:
-    0 18px 55px rgba(0,0,0,.78),
-    inset 0 1px 0 rgba(255,255,255,.12);
-
+  box-shadow: 0 18px 55px rgba(0,0,0,.78), inset 0 1px 0 rgba(255,255,255,.12);
   backdrop-filter: blur(14px);
-  display:grid;
-  place-items:center;
+
   transition: transform .12s ease, filter .12s ease, border-color .12s ease;
 }
 
-.tileBtn:hover .tileLogoWrap{
+.iconBtn:hover .iconGlass{
   transform: translateY(-3px);
   filter: brightness(1.08);
   border-color: rgba(255,255,255,.26);
 }
+.iconBtn:active .iconGlass{ transform: scale(.98); }
 
-.tileBtn:active .tileLogoWrap{
-  transform: scale(.98);
-}
-
-/* icon PNG */
-.tileLogo{
+.iconImg{
   width: var(--iconImg);
   height: var(--iconImg);
   object-fit:contain;
   filter: drop-shadow(0 10px 16px rgba(0,0,0,.45));
 }
 
-/* ===== nombre abajo (FUERA del icono) ===== */
-.tileText{
-  text-align:center;
-  line-height:1.05;
-}
-
-.tileTitle{
+.iconName{
   font-weight:1000;
   font-size:13.5px;
   letter-spacing:.2px;
+  color: rgba(255,255,255,.92);
+  text-align:center;
 }
 
-.tileSmall{
-  display:none; /* ✅ quitamos “Escanear QR / Efectivo / Cheque” */
-}
-
-/* ===== Card / Registro (no tocamos tu flujo) ===== */
+/* Cards */
 .card{
   margin-top:14px;
   background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
@@ -199,35 +147,28 @@ body::after{
   padding:16px;
   backdrop-filter: blur(16px);
 }
-
 .methodBadge{
-  display:inline-flex;
-  align-items:center;
-  padding:9px 12px;
-  border-radius:999px;
+  display:inline-flex; align-items:center;
+  padding:9px 12px; border-radius:999px;
   border:1px solid rgba(255,255,255,.14);
   background: rgba(0,0,0,.28);
-  font-weight:1000;
-  margin-bottom:12px;
+  font-weight:1000; margin-bottom:12px;
 }
 
 .form{ display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
-.field{display:flex; flex-direction:column; gap:6px}
-.fieldWide{grid-column:1 / -1}
-label{font-size:12px; color:var(--muted)}
+.field{ display:flex; flex-direction:column; gap:6px; }
+.fieldWide{ grid-column:1 / -1; }
+label{ font-size:12px; color:var(--muted); }
 input{
-  padding:12px 12px;
-  border-radius:16px;
+  padding:12px; border-radius:16px;
   border:1px solid rgba(255,255,255,.14);
   background: rgba(0,0,0,.55);
   color: var(--text);
   outline:none;
 }
-
 .btnRow{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
 .btn{
-  padding:12px 14px;
-  border-radius:16px;
+  padding:12px 14px; border-radius:16px;
   border:1px solid rgba(255,255,255,.14);
   background: rgba(255,255,255,.08);
   color: var(--text);
@@ -238,17 +179,39 @@ input{
 .btnOk{ background: rgba(20,220,150,.18); border-color: rgba(20,220,150,.32); }
 .btnGhost{ background: rgba(255,255,255,.06); }
 .btnDanger{ background: rgba(255,80,80,.16); border-color: rgba(255,80,80,.30); }
+.hint{ margin-top:10px; color: rgba(255,255,255,.75); font-size:12.5px; }
 
-/* ===== Modales / QR / Tabla (se quedan) ===== */
+/* Cobro */
+.payArea{ display:grid; gap:12px; }
+.qrBox{
+  display:grid; place-items:center;
+  padding:12px;
+  border-radius:22px;
+  background: rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.14);
+}
+.qrBox img{
+  width:min(360px, 92vw);
+  height:auto;
+  border-radius:18px;
+  background:#fff;
+  padding:12px;
+}
+.linkBox{
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  padding:12px;
+  border-radius:18px;
+  background: rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.14);
+}
+.linkBox a{ color:#7cc7ff; font-weight:900; word-break:break-all; }
+
+/* Modal */
 .modal{
-  position:fixed;
-  inset:0;
-  z-index:60;
+  position:fixed; inset:0; z-index:60;
   background: rgba(0,0,0,.80);
   backdrop-filter: blur(14px);
-  display:flex;
-  align-items:center;
-  justify-content:center;
+  display:flex; align-items:center; justify-content:center;
   padding:14px;
 }
 .modalCard{
@@ -262,21 +225,15 @@ input{
 .modalHead{
   padding:14px;
   border-bottom:1px solid rgba(255,255,255,.08);
-  display:flex;
-  justify-content:space-between;
-  gap:12px;
+  display:flex; justify-content:space-between; gap:12px;
   align-items:flex-start;
 }
 .modalActions{ padding:12px 14px 0; display:flex; gap:10px; flex-wrap:wrap; }
-.tableWrap{padding:12px 14px 14px; overflow:auto}
+.tableWrap{ padding:12px 14px 14px; overflow:auto; }
 .table{ width:100%; border-collapse:separate; border-spacing:0; min-width: 860px; }
 .table th,.table td{ padding:10px; border-bottom:1px solid rgba(255,255,255,.08); font-size:13px; }
 .table th{ color: rgba(255,255,255,.78); text-transform:uppercase; font-size:11px; letter-spacing:.12em; }
 .r{text-align:right}
-
-.qrBody{padding:14px; display:grid; place-items:center;}
-#qrImg{ width:min(390px, 92vw); height:auto; border-radius:20px; background:#fff; padding:12px; }
-.qrFoot{ padding:0 14px 14px; color:rgba(255,255,255,.75); font-size:12.5px; }
 
 /* Footer */
 .posFooter{
@@ -294,13 +251,9 @@ input{
   color:rgba(255,255,255,.7);
 }
 
-/* Responsive */
 @media (max-width: 390px){
-  :root{ --iconBtn: 84px; --iconImg: 58px; }
-  .gridFull{
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    max-width: 420px;
-    margin-bottom: 130px;
-  }
+  :root{ --iconBtn: 88px; --iconImg: 64px; }
+  .gridIcons{ grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 420px; }
   body::before{ background-size: 360px auto; background-position:center 88%; }
+  .form{ grid-template-columns:1fr; }
 }
