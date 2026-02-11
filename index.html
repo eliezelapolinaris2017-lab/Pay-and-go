@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!doctype html>
 <html lang="es">
 <head>
@@ -16,7 +17,7 @@
       <img src="assets/logo.png" class="logo" alt="Logo" />
       <div class="brandTxt">
         <div class="brandName">Pagos</div>
-        <div class="brandSub">Selecciona método → registra → recibo</div>
+        <div class="brandSub">Método → Registro → Pago → Recibo</div>
       </div>
     </div>
 
@@ -27,14 +28,15 @@
 
   <main class="wrap">
 
-    <!-- ===== PANTALLA 1: MÉTODOS ===== -->
+    <!-- ===== PANTALLA 1: MÉTODOS (BOTONES GRANDES) ===== -->
     <section id="screenMethods" class="screen">
       <div class="screenHead">
         <h1>Select Payment Method</h1>
-        <p>Click en un método para pasar a registro.</p>
+        <p>Elige un método para ir al registro.</p>
       </div>
 
-      <div id="methodsGrid" class="grid"></div>
+      <!-- Full-screen grid -->
+      <div id="methodsGrid" class="gridFull"></div>
     </section>
 
     <!-- ===== PANTALLA 2: REGISTRO ===== -->
@@ -42,7 +44,7 @@
       <div class="screenHead split">
         <div>
           <h1>Registro</h1>
-          <p>Guarda los datos y luego completa el pago manualmente.</p>
+          <p>Guarda los datos, abre el pago y marca como completado manualmente para generar recibo.</p>
         </div>
         <div class="rightActions">
           <button class="btn btnGhost" id="btnBack">← Volver</button>
@@ -81,18 +83,18 @@
         </div>
 
         <div class="hint" id="regHint">
-          Flujo: Guardar → Ir a pagar → Pago completado (manual).
+          Flujo recomendado: Guardar → Ir a pagar → Pago completado (manual).
         </div>
       </div>
     </section>
 
     <!-- ===== MODAL HISTORIAL ===== -->
-    <div id="modal" class="modal hidden">
+    <div id="modal" class="modal hidden" aria-hidden="true">
       <div class="modalCard">
         <div class="modalHead">
           <div>
             <h2>Historial</h2>
-            <p>LocalStorage. Exporta o borra si quieres.</p>
+            <p>Se guarda en el dispositivo (localStorage). Exporta o borra cuando quieras.</p>
           </div>
           <button class="btn btnGhost" id="btnCloseModal">Cerrar</button>
         </div>
