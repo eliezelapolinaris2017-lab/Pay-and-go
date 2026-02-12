@@ -2,211 +2,167 @@
 <html lang="es">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-  <title>Nexus POS Express</title>
-  <meta name="description" content="Nexus POS Express — Payment Platform"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+  <meta name="theme-color" content="#000000"/>
+  <title>Nexus POS — Payment Platform</title>
 
-  <!-- favicon 404 killer -->
-  <link rel="icon" href="favicon.ico">
-  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png"/>
 
-  <!-- PWA -->
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#07070b">
+  <!-- Firebase v9 compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800;900&display=swap" rel="stylesheet">
-
-  <link rel="stylesheet" href="styles.css">
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
-
 <body>
-  <div class="bg"></div>
 
-  <!-- PIN LOCK -->
-  <div id="pinLock" class="pin-lock hidden">
-    <div class="pin-card">
-      <div class="pin-title">Acceso</div>
-      <div class="pin-sub">Ingrese su PIN para continuar.</div>
-
-      <label for="pinInput">PIN</label>
-      <input id="pinInput" class="pin-input" inputmode="numeric" autocomplete="one-time-code" placeholder="••••" maxlength="12"/>
-
-      <div class="btn-row">
-        <button id="pinEnterBtn" class="btn primary">Entrar</button>
-        <button id="pinResetBtn" class="btn danger">Reset</button>
-      </div>
-
-      <div class="pin-hint">Tip: “Cambiar PIN” está dentro de Historial.</div>
-    </div>
-  </div>
-
-  <!-- TOPBAR -->
-  <div class="topbar">
-    <div>
-      <div id="pageTitle" class="h1">Select Payment Method</div>
-      <div id="pageSub" class="sub">Selecciona el método. Luego registras el cliente y cobras.</div>
-    </div>
-    <button id="openHistoryBtn" class="chip">Historial</button>
-  </div>
+  <!-- Botón flotante único -->
+  <button class="fabHistory" id="btnHistory">Historial</button>
 
   <main class="wrap">
-    <!-- VIEW: METHODS -->
-    <section id="viewMethods" class="view">
-      <div class="pay-grid">
-        <!-- iconos SOLO + nombre afuera (no cambies nombres de archivos) -->
-        <button class="pay-icon-btn" data-method="stripe">
-          <img src="assets/icons/stripe.png" alt="Stripe">
-          <span>Stripe</span>
-        </button>
 
-        <button class="pay-icon-btn" data-method="ath">
-          <img src="assets/icons/ath.png" alt="ATH Móvil">
-          <span>ATH Móvil</span>
-        </button>
-
-        <button class="pay-icon-btn" data-method="tap">
-          <img src="assets/icons/tap.png" alt="Tap to Pay">
-          <span>Tap to Pay</span>
-        </button>
-
-        <button class="pay-icon-btn" data-method="cash">
-          <img src="assets/icons/cash.png" alt="Cash">
-          <span>Cash</span>
-        </button>
-
-        <button class="pay-icon-btn" data-method="checks">
-          <img src="assets/icons/checks.png" alt="Checks">
-          <span>Checks</span>
-        </button>
-
-        <!-- LINKS (sin mostrar URL en pantalla) -->
-        <button class="pay-icon-btn link-btn" data-method="stripe_link">
-          <img src="assets/icons/stripe.png" alt="Stripe Link">
-          <span>Stripe Link</span>
-        </button>
-
-        <button class="pay-icon-btn link-btn" data-method="ath_link">
-          <img src="assets/icons/ath.png" alt="ATH Link">
-          <span>ATH Link</span>
-        </button>
+    <!-- Pantalla 1 -->
+    <section class="screen" id="screenMethods">
+      <div class="screenHead">
+        <h1>Select Payment Method</h1>
+        <p>Selecciona el método. Luego registras el cliente y cobras.</p>
       </div>
+      <div class="gridIcons" id="methodsGrid"></div>
     </section>
 
-    <!-- VIEW: REGISTRO -->
-    <section id="viewRegistro" class="view hidden">
-      <div class="card glass">
-        <div id="pillMetodo" class="pill">Método: —</div>
+    <!-- Pantalla 2 -->
+    <section class="screen hidden" id="screenRegister">
+      <div class="screenHead">
+        <h1>Registro</h1>
+        <p>Completa los datos para ticket e historial.</p>
+      </div>
 
-        <form id="registroForm" class="form" autocomplete="off">
-          <label for="nombre">Nombre</label>
-          <input id="nombre" placeholder="Cliente" required>
+      <div class="card">
+        <div class="methodBadge" id="methodBadge">Método: —</div>
 
-          <label for="telefono">Teléfono (opcional)</label>
-          <input id="telefono" placeholder="787-000-0000" inputmode="tel">
+        <form class="form" id="payForm">
+          <div class="field">
+            <label>Nombre</label>
+            <input id="name" required placeholder="Cliente"/>
+          </div>
 
-          <label for="monto">Monto ($)</label>
-          <input id="monto" placeholder="75.00" inputmode="decimal" required>
+          <div class="field">
+            <label>Teléfono (opcional)</label>
+            <input id="phone" inputmode="tel" placeholder="787-000-0000"/>
+          </div>
 
-          <label for="nota">Nota (opcional)</label>
-          <input id="nota" placeholder="Ej: Servicio / Referencia">
+          <div class="field">
+            <label>Monto ($)</label>
+            <input id="amount" type="number" step="0.01" min="0" required placeholder="75.00"/>
+          </div>
 
-          <div class="btn-row">
-            <button type="button" id="volverBtn" class="btn">Volver</button>
-            <button type="submit" class="btn primary">Continuar</button>
+          <div class="field">
+            <label>Nota (opcional)</label>
+            <input id="note" placeholder="Ej: Servicio / Referencia"/>
+          </div>
+
+          <div class="fieldWide btnRow">
+            <button class="btn btnGhost" type="button" id="btnBack">Volver</button>
+            <button class="btn btnPrimary" type="submit">Continuar</button>
           </div>
         </form>
 
-        <div class="footnote">
-          POS operativo: “Pago completado” es manual. El recibo se genera en PDF (jsPDF) y se comparte desde el Share Sheet.
+        <div class="hint">
+          “Pago completado” es manual. El ticket se puede compartir por Mensajes desde el Share Sheet.
         </div>
       </div>
     </section>
 
-    <!-- VIEW: COBRO -->
-    <section id="viewCobro" class="view hidden">
-      <div class="card glass">
-        <div class="modal-top" style="margin-bottom:10px;">
-          <div>
-            <div id="cobroTitle" class="modal-title">Cobro</div>
-            <div class="modal-sub">Muestra QR o abre enlace. Luego marca “Pago completado”.</div>
-          </div>
+    <!-- Pantalla 3 -->
+    <section class="screen hidden" id="screenPay">
+      <div class="screenHead">
+        <h1>Cobro</h1>
+        <p>Muestra QR o abre enlace. Luego marca “Pago completado”.</p>
+      </div>
+
+      <div class="card">
+        <div class="methodBadge" id="payBadge">Método: —</div>
+
+        <div id="payArea" class="payArea"></div>
+
+        <div class="btnRow">
+          <button class="btn btnGhost" type="button" id="btnEdit">Editar datos</button>
+          <button class="btn btnOk" type="button" id="btnPaid">Pago completado (manual)</button>
         </div>
 
-        <div id="cobroMetodoPill" class="pill">Método: —</div>
-
-        <div id="qrArea" class="qr-wrap hidden">
-          <div class="qr-card">
-            <img id="qrImg" class="qr-img" src="" alt="QR">
-          </div>
-        </div>
-
-        <!-- Links (URL oculto, botones mandan/abren/comparten) -->
-        <div id="linkArea" class="link-wrap hidden">
-          <div class="link-title">Link de pago</div>
-          <div class="footnote">No se muestra el URL. Se gestiona desde estos botones.</div>
-
-          <div class="btn-row">
-            <button type="button" id="openLinkBtn" class="btn primary">Abrir link</button>
-            <button type="button" id="shareLinkBtn" class="btn">Enviar link</button>
-          </div>
-        </div>
-
-        <div class="btn-row" style="margin-top:14px;">
-          <button type="button" id="editarBtn" class="btn">Editar datos</button>
-          <button type="button" id="pagadoBtn" class="btn success">Pago completado (manual)</button>
-        </div>
-
-        <div class="footnote">
-          El cliente escanea/abre el pago. Luego marcas “Pago completado (manual)”. Se genera recibo y se guarda en Firebase + cache local.
-        </div>
+        <div class="hint" id="payHint"></div>
       </div>
     </section>
+
   </main>
 
-  <!-- HISTORIAL MODAL -->
-  <div id="modal" class="modal hidden">
-    <div class="modal-card glass">
-      <div class="modal-top">
+  <footer class="posFooter">
+    <div class="posFooterSub">PAYMENT PLATFORM</div>
+  </footer>
+
+  <!-- Modal Historial -->
+  <div class="modal hidden" id="historyModal">
+    <div class="modalCard">
+      <div class="modalHead">
         <div>
-          <div class="modal-title">Historial</div>
-          <div class="modal-sub">Firebase primero. Cache local si estás offline.</div>
+          <h2>Historial</h2>
+          <p>Firebase primero. Cache local si estás offline.</p>
         </div>
-        <button id="closeModalBtn" class="chip">Cerrar</button>
+        <button class="btn btnGhost" id="btnCloseHistory">Cerrar</button>
       </div>
 
-      <div class="modal-actions">
-        <button id="syncBtn" class="btn primary" type="button">Sync Google</button>
-        <button id="refreshBtn" class="btn" type="button">Refrescar</button>
-        <button id="changePinBtn" class="btn" type="button">Cambiar PIN</button>
-        <button id="clearCacheBtn" class="btn danger" type="button">Borrar cache local</button>
+      <!-- ✅ Sync Google adentro del historial -->
+      <div class="modalActions">
+        <button class="btn btnPrimary" id="btnSync">Sync Google</button>
+        <button class="btn btnGhost" id="btnRefresh">Refrescar</button>
+        <button class="btn btnGhost" id="btnChangePin">Cambiar PIN</button>
+        <button class="btn btnDanger" id="btnClearLocal">Borrar cache local</button>
       </div>
 
-      <div class="table">
-        <div class="thead">
-          <div>MONTO</div>
-          <div>RECIBO</div>
-          <div>ACCIÓN</div>
-        </div>
-        <div id="tbody" class="tbody"></div>
+      <div class="tableWrap">
+        <table class="table" id="historyTable">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Método</th>
+              <th class="r">Monto</th>
+              <th>Recibo</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
       </div>
+
     </div>
   </div>
 
-  <!-- Firebase + jsPDF -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+  <!-- ✅ PIN Modal (bloqueo) -->
+  <div class="pinModal" id="pinModal">
+    <div class="pinCard">
+      <div class="pinTitle" id="pinTitle">Bloqueo — Nexus POS</div>
+      <div class="pinSub" id="pinSub">Entra tu PIN para continuar.</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+      <div class="pinDots" id="pinDots"></div>
+      <div class="pinPad" id="pinPad"></div>
+
+      <div class="pinRow">
+        <button class="btn btnGhost" id="pinBackspace">Borrar</button>
+        <button class="btn btnPrimary" id="pinSubmit">Entrar</button>
+      </div>
+
+      <div class="pinHint" id="pinHint"></div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
-
   <script>
-    // SW (usa uno solo)
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
-    }
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js");
   </script>
 </body>
 </html>
