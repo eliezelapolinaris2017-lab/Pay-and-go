@@ -433,3 +433,46 @@ input{
   .pinCard{ padding:16px 14px 14px; }
   .pinKey{ padding:15px 0; }
 }
+/* ===== FIX VISIBILIDAD GRID ICONOS ===== */
+#methodsGrid{
+  position: relative;
+  z-index: 5;
+  min-height: 140px;          /* fuerza espacio aunque no carguen imgs */
+}
+
+.gridIcons{
+  display:grid !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+
+  width: 100%;
+  max-width: 560px;
+  margin: 16px 0 220px;       /* deja aire para el footer */
+}
+
+/* En móvil: evita que quede muy apretado */
+@media (max-width: 520px){
+  .gridIcons{
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 14px !important;
+  }
+}
+
+/* Asegura que el footer no tape contenido */
+.posFooter{
+  z-index: 1 !important;
+}
+
+/* Si tu body::before o body::after están encima, esto lo arregla */
+body::before,
+body::after{
+  pointer-events:none;
+  z-index:-2 !important;
+}
+
+/* Debug visual (quita luego): muestra borde del grid */
+#methodsGrid{
+  outline: 1px dashed rgba(255,255,255,.18);
+  border-radius: 16px;
+}
