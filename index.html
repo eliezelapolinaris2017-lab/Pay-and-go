@@ -32,6 +32,7 @@
         <p>Selecciona el método. Luego registras el cliente y cobras.</p>
       </div>
       <div class="gridIcons" id="methodsGrid"></div>
+      <div class="miniNote">🔒 Operación segura desde el móvil.</div>
     </section>
 
     <!-- Pantalla 2 -->
@@ -72,7 +73,7 @@
         </form>
 
         <div class="hint">
-          “Pago completado” es manual. El ticket se puede compartir por Mensajes desde el Share Sheet.
+          “Pago completado” es manual. El recibo se comparte por el Share Sheet (iPhone).
         </div>
       </div>
     </section>
@@ -81,7 +82,7 @@
     <section class="screen hidden" id="screenPay">
       <div class="screenHead">
         <h1>Cobro</h1>
-        <p>Muestra QR o abre enlace. Luego marca “Pago completado”.</p>
+        <p>Usa QR o abre enlace. Luego marca “Pago completado”.</p>
       </div>
 
       <div class="card">
@@ -115,7 +116,6 @@
         <button class="btn btnGhost" id="btnCloseHistory">Cerrar</button>
       </div>
 
-      <!-- ✅ Sync Google adentro del historial -->
       <div class="modalActions">
         <button class="btn btnPrimary" id="btnSync">Sync Google</button>
         <button class="btn btnGhost" id="btnRefresh">Refrescar</button>
@@ -142,8 +142,8 @@
     </div>
   </div>
 
-  <!-- ✅ PIN Modal (bloqueo) -->
-  <div class="pinModal" id="pinModal">
+  <!-- PIN Modal -->
+  <div class="pinModal hidden" id="pinModal">
     <div class="pinCard">
       <div class="pinTitle" id="pinTitle">Bloqueo — Nexus POS</div>
       <div class="pinSub" id="pinSub">Entra tu PIN para continuar.</div>
