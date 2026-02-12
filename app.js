@@ -306,7 +306,7 @@ pinSubmit.onclick = async ()=>{
 })();
 
 // ===== Auth =====
-auth.signInAnonymously().catch(console.error);
+auth.signInWithEmailAndPassword(email, password)
 
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
