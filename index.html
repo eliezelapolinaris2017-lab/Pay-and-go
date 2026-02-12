@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+  <meta name="theme-color" content="#000000"/>
+  <title>Nexus POS — Payment Platform</title>
+
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png"/>
+
+  <!-- Firebase v9 compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+
+<body>
+  <!-- Historial flotante -->
+  <button class="fabHistory" id="btnHistory">Historial</button>
+
+  <main class="wrap">
+
+    <!-- Header -->
+    <section class="screen" id="screenMethods">
+      <div class="screenHead">
+        <h1>Select Payment Method</h1>
+        <p>Selecciona el método. Luego registras el cliente y cobras.</p>
+
+        <div class="secureLine" id="secureLine">
+          <span class="lock">🔒</span>
+          <span>Operación segura desde el móvil.</span>
+        </div>
+      </div>
+
+      <div class="gridIcons" id="methodsGrid"></div>
+    </section>
+
+    <!-- Registro -->
+    <section class="screen hidden" id="screenRegister">
+      <div class="screenHead">
+        <h1>Registro</h1>
+        <p>Completa los datos para ticket e historial.</p>
+      </div>
+
+      <div class="card">
+        <div class="methodBadge" id="methodBadge">Método: —</div>
+
+        <form class="form" id="payForm">
+          <div class="field">
+            <label>Nombre</label>
+            <input id="name" required placeholder="Cliente"/>
+          </div>
+
+          <div class="field">
+            <label>Teléfono (opcional)</label>
+            <input id="phone" inputmode="tel" placeholder="7870000000"/>
+          </div>
+
+          <div class="field">
+            <label>Monto ($)</label>
+            <input id="amount" type="number" step="0.01" min="0" required placeholder="75.00"/>
+          </div>
+
+          <div class="field">
+            <label>Nota (opcional)</label>
+            <input id="note" placeholder="Ej: Servicio / Referencia"/>
+          </div>
+
+          <div class="fieldWide btnRow">
+            <button class="btn btnGhost" type="button" id="btnBack">Volver</button>
+            <button class="btn btnPrimary" type="submit">Continuar</button>
+          </div>
+        </form>
+
+        <div class="hint">
+          POS operativo: “Pago completado” es manual. El recibo se comparte por Mensajes desde el Share Sheet.
+        </div>
+      </div>
+    </section>
+
+    <!-- Cobro -->
+    <section class="screen hidden" id="screenPay">
+      <div class="screenHead">
+        <h1>Cobro</h1>
+        <p>Muestra QR o abre enlace. Luego marca “Pago completado”.</p>
+      </div>
+
+      <div class="card">
+        <div class="methodBadge" id="payBadge">Método: —</div>
+
+        <div id="payArea" class="payArea"></div>
+
+        <div class="btnRow">
+          <button class="btn btnGhost" type="button" id="btnEdit">Editar datos</button>
+          <button class="btn btnOk" type="button" id="btnPaid">Pago completado (manual)</button>
+        </div>
+
+        <div class="hint" id="payHint"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="posFooter">
+    <div class="posFooterSub">PAYMENT PLATFORM</div>
+  </footer>
+
+  <!-- AUTH (Email/Password) -->
+  <div class="authModal" id="authModal">
+    <div class="authCard">
+      <div class="authTitle">Acceso — Nexus POS</div>
+      <div class="authSub">Inicia sesión con Email y Password.</div>
+
+      <div class="authGrid">
+        <div class="field">
+          <label>Email</label>
+          <input id="authEmail" type="email" placeholder="tu@email.com" autocomplete="email"/>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input id="authPass" type="password" placeholder="••••••••" autocomplete="current-password"/>
+        </div>
+      </div>
+
+      <div class="btnRow">
+        <button class="btn btnGhost" id="btnLogin">Entrar</button>
+        <button class="btn btnPrimary" id="btnRegister">Crear cuenta</button>
+      </div>
+
+      <div class="hint" id="authHint"></div>
+    </div>
+  </div>
+
+  <!-- Historial -->
+  <div class="modal hidden" id="historyModal">
+    <div class="modalCard">
+      <div class="modalHead">
+        <div>
+          <h2>Historial</h2>
+          <p>Tu cuenta, tu data. Todo por UID.</p>
+        </div>
+        <button class="btn btnGhost" id="btnCloseHistory">Cerrar</button>
+      </div>
+
+      <div class="modalActions">
+        <button class="btn btnGhost" id="btnRefresh">Refrescar</button>
+        <button class="btn btnDanger" id="btnLogout">Cerrar sesión</button>
+      </div>
+
+      <div class="tableWrap">
+        <table class="table" id="historyTable">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Cliente</th>
+              <th>Método</th>
+              <th class="r">Monto</th>
+              <th>Recibo</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js");
+  </script>
+</body>
+</html>
