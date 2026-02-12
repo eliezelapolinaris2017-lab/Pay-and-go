@@ -1,15 +1,21 @@
 /********************************************************
- Nexus POS — Payment Platform (FINAL)
- - assets/bg.png + assets/icons/*
- - Firebase Auth: Anonymous + Google link (historial único)
+ Nexus POS — Payment Platform (FIXED)
+ - Icono SOLO + nombre afuera
+ - Firebase ON (Anonymous + optional Google link)
  - Firestore: users/{uid}/payments
- - Ticket: jsPDF + Share Sheet
- - PIN lock: setup + verify + change pin
+ - Recibo: jsPDF REAL + Share Sheet
+ - Links Stripe/Ath: NO se muestra URL, va oculto y se envía/abre con botón
+ - QR: usa candidatos en assets/ y assets/icons/
+ - PIN: setup/verify/change (estable)
 *********************************************************/
 
+// ====== LINKS REALES (los tuyos) ======
+const STRIPE_PAY_LINK = "https://buy.stripe.com/5kQ9AS8nQ2mA6w6aFV1RC0h";
+const ATH_PAY_LINK    = "https://pagos.athmovilapp.com/pagoPorCodigo.html?id=8fbf89be-ac6a-4a00-b4d8-a7020c474660";
+
+// ====== CONFIG ======
 const CONFIG = {
-  brand: { business: "Nexus Payments", phone: "787-664-3079", location: "Puerto Rico" },
-  links: { tapToPay: "https://example.com/tap-to-pay" },
+  brand: { business: "Nexus POS", phone: "787-664-3079", location: "Puerto Rico" },
   icons: {
     stripe: "assets/icons/stripe.png",
     ath: "assets/icons/ath.png",
@@ -17,9 +23,10 @@ const CONFIG = {
     cash: "assets/icons/cash.png",
     checks: "assets/icons/checks.png"
   },
+  // Soporta tu estructura real (assets/qr-*.png y/o assets/icons/*-qr.png)
   qrCandidates: {
-    stripe: ["assets/icons/stripe-qr.png", "assets/icons/stripe.png"],
-    ath: ["assets/icons/ath-qr.png", "assets/icons/ath.png"]
+    stripe: ["assets/qr-stripe.png", "assets/icons/stripe-qr.png", "assets/icons/stripe.png"],
+    ath:    ["assets/qr-ath.png",    "assets/icons/ath-qr.png",    "assets/icons/ath.png"]
   }
 };
 
@@ -78,13 +85,17 @@ const pinBackspace = document.getElementById("pinBackspace");
 const pinSubmit = document.getElementById("pinSubmit");
 const pinHint = document.getElementById("pinHint");
 
-// ===== Métodos =====
+// ===== Métodos (incluye 2 últimos: LINKS) =====
 const METHODS = [
-  { id:"stripe", label:"Stripe", icon: CONFIG.icons.stripe, mode:"qr" },
-  { id:"ath", label:"ATH Móvil", icon: CONFIG.icons.ath, mode:"qr" },
-  { id:"tap", label:"Tap to Pay", icon: CONFIG.icons.tap, mode:"link", link: () => CONFIG.links.tapToPay },
-  { id:"cash", label:"Cash", icon: CONFIG.icons.cash, mode:"manual" },
-  { id:"checks", label:"Checks", icon: CONFIG.icons.checks, mode:"manual" }
+  { id:"stripe",     label:"Stripe",     icon: CONFIG.icons.stripe, mode:"qr" },
+  { id:"ath",        label:"ATH Móvil",  icon: CONFIG.icons.ath,    mode:"qr" },
+  { id:"tap",        label:"Tap to Pay", icon: CONFIG.icons.tap,    mode:"manual" }, // si luego quieres link deep, se cambia
+  { id:"cash",       label:"Cash",       icon: CONFIG.icons.cash,   mode:"manual" },
+  { id:"checks",     label:"Checks",     icon: CONFIG.icons.checks, mode:"manual" },
+
+  // ✅ Los 2 últimos (como tú pediste): enviar link pago
+  { id:"stripeLink", label:"Stripe Link", icon: CONFIG.icons.stripe, mode:"paylink", link: STRIPE_PAY_LINK },
+  { id:"athLink",    label:"ATH Link",    icon: CONFIG.icons.ath,    mode:"paylink", link: ATH_PAY_LINK }
 ];
 
 const state = { method:null, form:{ name:"", phone:"", amount:"", note:"" } };
@@ -104,7 +115,10 @@ function go(to){ [screenMethods, screenRegister, screenPay].forEach(hide); show(
 function money(n){ return (Number(n||0)).toFixed(2); }
 function safeText(s){ return String(s ?? "").trim(); }
 function pad2(v){ return String(v).padStart(2,"0"); }
-function nowStamp(){ const d=new Date(); return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`; }
+function nowStamp(){
+  const d=new Date();
+  return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+}
 function receiptNo(){ return `R-${nowStamp()}`; }
 function currentUID(){ return auth.currentUser?.uid || null; }
 function fmtDate(v){
@@ -120,22 +134,35 @@ function setImgWithFallback(imgEl, candidates){
   imgEl.onerror = tryNext;
   tryNext();
 }
-
 function isiOS(){ return /iPhone|iPad|iPod/i.test(navigator.userAgent || ""); }
 
-// ===== PIN (hash SHA-256) =====
+async function copyToClipboard(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+async function shareText(title, text){
+  if(navigator.share){
+    try{ await navigator.share({ title, text }); return true; } catch(e){ return false; }
+  }
+  return false;
+}
+
+// ===== PIN (SHA-256) =====
 async function sha256(text){
   const enc = new TextEncoder().encode(text);
   const hash = await crypto.subtle.digest("SHA-256", enc);
   return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
 }
+function pinStoredHash(){ return localStorage.getItem(LS_PIN) || ""; }
 
 let pinBuffer = "";
-let pinMode = "verify"; // verify | setup | change
-let pinSetupFirst = "";
-let pinUnlocked = false;
-
-function pinStoredHash(){ return localStorage.getItem(LS_PIN) || ""; }
+let pinFlow = "verify"; // verify | setup1 | setup2 | change_verify | change_new1 | change_new2
+let pinTemp = "";
 
 function renderDots(){
   pinDots.innerHTML = "";
@@ -145,42 +172,45 @@ function renderDots(){
     pinDots.appendChild(d);
   }
 }
-
 function pinSetHint(msg){ pinHint.textContent = msg || ""; }
-
-function openPin(mode){
-  pinMode = mode;
+function openPin(flow){
+  pinFlow = flow;
   pinBuffer = "";
-  pinSetupFirst = "";
+  pinTemp = "";
   pinSetHint("");
+  pinModal.classList.remove("hidden");
+  renderDots();
 
-  const hasPin = !!pinStoredHash();
-
-  if(mode === "verify"){
+  if(flow === "verify"){
     pinTitle.textContent = "Bloqueo — Nexus POS";
-    pinSub.textContent = hasPin ? "Entra tu PIN para continuar." : "Crea un PIN (4 dígitos) para proteger la app.";
-  } else if(mode === "setup"){
+    pinSub.textContent = "Entra tu PIN para continuar.";
+  }
+  if(flow === "setup1"){
     pinTitle.textContent = "Crear PIN";
     pinSub.textContent = "Entra un PIN de 4 dígitos.";
-  } else if(mode === "change"){
-    pinTitle.textContent = "Cambiar PIN";
-    pinSub.textContent = "Primero confirma tu PIN actual.";
   }
-
-  renderDots();
-  pinModal.classList.remove("hidden");
+  if(flow === "setup2"){
+    pinTitle.textContent = "Confirmar PIN";
+    pinSub.textContent = "Repite el PIN (mismos 4 dígitos).";
+  }
+  if(flow === "change_verify"){
+    pinTitle.textContent = "Cambiar PIN";
+    pinSub.textContent = "Confirma tu PIN actual.";
+  }
+  if(flow === "change_new1"){
+    pinTitle.textContent = "Nuevo PIN";
+    pinSub.textContent = "Entra el nuevo PIN (4 dígitos).";
+  }
+  if(flow === "change_new2"){
+    pinTitle.textContent = "Confirmar nuevo PIN";
+    pinSub.textContent = "Repite el nuevo PIN.";
+  }
 }
-
-function closePin(){
-  pinModal.classList.add("hidden");
-  pinUnlocked = true;
-}
+function closePin(){ pinModal.classList.add("hidden"); }
 
 function buildPinPad(){
-  const keys = ["1","2","3","4","5","6","7","8","9","0"];
-  pinPad.innerHTML = "";
-  // layout 1-9, then 0 centered
   const layout = ["1","2","3","4","5","6","7","8","9","0"];
+  pinPad.innerHTML = "";
   layout.forEach(k=>{
     const b=document.createElement("button");
     b.className="pinKey";
@@ -190,81 +220,8 @@ function buildPinPad(){
     pinPad.appendChild(b);
   });
 }
-
-async function pinSubmitFlow(){
-  const hasPin = !!pinStoredHash();
-
-  // Si no hay PIN guardado, forzamos setup desde verify
-  if(!hasPin && pinMode==="verify"){
-    pinMode = "setup";
-    pinTitle.textContent = "Crear PIN";
-    pinSub.textContent = "Entra un PIN de 4 dígitos.";
-  }
-
-  if(pinBuffer.length !== 4){
-    pinSetHint("PIN incompleto. Son 4 dígitos.");
-    return;
-  }
-
-  if(pinMode === "verify"){
-    const enteredHash = await sha256(pinBuffer);
-    if(enteredHash === pinStoredHash()){
-      closePin();
-    }else{
-      pinSetHint("PIN incorrecto.");
-      pinBuffer = "";
-      renderDots();
-    }
-    return;
-  }
-
-  if(pinMode === "setup"){
-    // doble confirmación
-    if(!pinSetupFirst){
-      pinSetupFirst = pinBuffer;
-      pinBuffer = "";
-      renderDots();
-      pinSub.textContent = "Confirma el PIN (mismos 4 dígitos).";
-      pinSetHint("");
-      return;
-    }
-    if(pinSetupFirst !== pinBuffer){
-      pinSetHint("No coincide. Intenta de nuevo.");
-      pinSetupFirst = "";
-      pinBuffer = "";
-      renderDots();
-      pinSub.textContent = "Entra un PIN de 4 dígitos.";
-      return;
-    }
-    const h = await sha256(pinBuffer);
-    localStorage.setItem(LS_PIN, h);
-    pinSetHint("PIN guardado ✅");
-    setTimeout(()=>closePin(), 450);
-    return;
-  }
-
-  if(pinMode === "change"){
-    // paso 1: validar pin actual
-    if(pinTitle.textContent.includes("Cambiar") && pinSub.textContent.includes("actual")){
-      const enteredHash = await sha256(pinBuffer);
-      if(enteredHash !== pinStoredHash()){
-        pinSetHint("PIN actual incorrecto.");
-        pinBuffer = "";
-        renderDots();
-        return;
-      }
-      // ahora cambia a setup de nuevo pin
-      pinMode = "setup";
-      pinTitle.textContent = "Nuevo PIN";
-      pinSub.textContent = "Entra el nuevo PIN (4 dígitos).";
-      pinSetHint("");
-      pinBuffer = "";
-      renderDots();
-      pinSetupFirst = "";
-      return;
-    }
-  }
-}
+buildPinPad();
+renderDots();
 
 pinBackspace.onclick = ()=>{
   if(pinBuffer.length>0){
@@ -272,24 +229,85 @@ pinBackspace.onclick = ()=>{
     renderDots();
   }
 };
-pinSubmit.onclick = pinSubmitFlow;
 
-buildPinPad();
-renderDots();
-
-// Arranque: si hay PIN, verifica; si no, setup.
-(function bootPin(){
-  if(pinStoredHash()){
-    openPin("verify");
-  }else{
-    openPin("setup");
+pinSubmit.onclick = async ()=>{
+  if(pinBuffer.length !== 4){
+    pinSetHint("PIN incompleto. Son 4 dígitos.");
+    return;
   }
+
+  const stored = pinStoredHash();
+
+  // Si no hay PIN todavía, forzamos setup
+  if(!stored && pinFlow === "verify"){
+    openPin("setup1");
+    return;
+  }
+
+  if(pinFlow === "verify"){
+    const entered = await sha256(pinBuffer);
+    if(entered === stored){ closePin(); }
+    else { pinSetHint("PIN incorrecto."); pinBuffer=""; renderDots(); }
+    return;
+  }
+
+  if(pinFlow === "setup1"){
+    pinTemp = pinBuffer;
+    openPin("setup2");
+    return;
+  }
+
+  if(pinFlow === "setup2"){
+    if(pinBuffer !== pinTemp){
+      pinSetHint("No coincide. Intenta de nuevo.");
+      openPin("setup1");
+      return;
+    }
+    localStorage.setItem(LS_PIN, await sha256(pinBuffer));
+    pinSetHint("PIN guardado ✅");
+    setTimeout(()=>closePin(), 350);
+    return;
+  }
+
+  if(pinFlow === "change_verify"){
+    const entered = await sha256(pinBuffer);
+    if(entered !== stored){
+      pinSetHint("PIN actual incorrecto.");
+      pinBuffer=""; renderDots();
+      return;
+    }
+    openPin("change_new1");
+    return;
+  }
+
+  if(pinFlow === "change_new1"){
+    pinTemp = pinBuffer;
+    openPin("change_new2");
+    return;
+  }
+
+  if(pinFlow === "change_new2"){
+    if(pinBuffer !== pinTemp){
+      pinSetHint("No coincide. Intenta de nuevo.");
+      openPin("change_new1");
+      return;
+    }
+    localStorage.setItem(LS_PIN, await sha256(pinBuffer));
+    pinSetHint("PIN actualizado ✅");
+    setTimeout(()=>closePin(), 350);
+    return;
+  }
+};
+
+// Boot PIN
+(function bootPin(){
+  if(pinStoredHash()) openPin("verify");
+  else openPin("setup1");
 })();
 
-// ===== Auth: start anonymous =====
+// ===== Auth =====
 auth.signInAnonymously().catch(console.error);
 
-// ===== Google Sync (link anonymous -> Google) =====
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
@@ -306,11 +324,7 @@ auth.onAuthStateChanged(async (user)=>{
 async function linkAnonymousToGoogle(){
   const user = auth.currentUser;
   if(!user) return alert("Auth no listo todavía.");
-
-  if(!user.isAnonymous){
-    alert("Google ya está conectado ✅");
-    return;
-  }
+  if(!user.isAnonymous){ alert("Google ya está conectado ✅"); return; }
 
   try{
     if(isiOS()){
@@ -322,14 +336,14 @@ async function linkAnonymousToGoogle(){
     }
   }catch(err){
     console.warn("Google link error:", err);
-    alert("No se pudo conectar Google. Verifica Authorized Domains en Firebase Auth.");
+    alert("No se pudo conectar Google. Revisa Authorized Domains en Firebase Auth.");
   }
 }
 
-btnSync.addEventListener("click", linkAnonymousToGoogle);
-btnChangePin.addEventListener("click", ()=> openPin("change"));
+btnSync?.addEventListener("click", linkAnonymousToGoogle);
+btnChangePin?.addEventListener("click", ()=> openPin("change_verify"));
 
-// ===== Render métodos =====
+// ===== Render métodos (icono solo + nombre afuera) =====
 function renderMethods(){
   methodsGrid.innerHTML = "";
   METHODS.forEach(m=>{
@@ -338,7 +352,9 @@ function renderMethods(){
     btn.type="button";
     btn.innerHTML = `
       <div class="iconInner">
-        <div class="iconGlass"><img class="iconImg" src="${m.icon}" alt="${m.label}"></div>
+        <div class="iconGlass">
+          <img class="iconImg" src="${m.icon}" alt="${m.label}">
+        </div>
         <div class="iconName">${m.label}</div>
       </div>`;
     btn.onclick=()=>selectMethod(m.id);
@@ -347,13 +363,10 @@ function renderMethods(){
 }
 
 function selectMethod(id){
-  if(!pinUnlocked && pinModal && !pinModal.classList.contains("hidden")) return;
-
   state.method = METHODS.find(m=>m.id===id);
   if(!state.method) return;
 
   methodBadge.textContent = `Método: ${state.method.label}`;
-
   nameEl.value=""; phoneEl.value=""; amountEl.value=""; noteEl.value="";
   go(screenRegister);
 }
@@ -372,40 +385,56 @@ payForm.addEventListener("submit",(e)=>{
   go(screenPay);
 });
 
-// ===== Cobro =====
+// ===== Cobro UI =====
 function renderPayScreen(){
   const m=state.method, f=state.form;
+
   payBadge.textContent = `Método: ${m.label} — Total $${money(f.amount)}`;
-  payArea.innerHTML=""; payHint.textContent="";
+  payArea.innerHTML = "";
+  payHint.textContent = "";
 
   if(m.mode==="qr"){
     payArea.innerHTML = `<div class="qrBox"><img id="qrImg" alt="QR ${m.label}"></div>`;
     const img=document.getElementById("qrImg");
     const candidates = m.id==="stripe" ? CONFIG.qrCandidates.stripe : CONFIG.qrCandidates.ath;
     setImgWithFallback(img, candidates);
+
     payHint.textContent = "El cliente escanea el QR. Luego marca “Pago completado (manual)”.";
+    return;
   }
 
-  if(m.mode==="link"){
-    const link=m.link();
+  if(m.mode==="paylink"){
+    const domain = (m.link || "").replace(/^https?:\/\//,"").split("/")[0] || "enlace";
     payArea.innerHTML = `
-      <div class="linkBox">
-        <div><b>Link:</b></div>
-        <a href="${link}" target="_blank" rel="noopener">${link}</a>
-        <button class="btn btnPrimary" type="button" id="btnOpenLink">Abrir</button>
-      </div>`;
-    document.getElementById("btnOpenLink").onclick=()=>window.open(link,"_blank");
-    payHint.textContent = "Abre el enlace y confirma manual cuando esté pago.";
+      <div class="linkCard">
+        <div class="linkMeta">Enlace de pago listo. (No se muestra aquí. Se abre o se envía.)</div>
+        <div class="linkRow">
+          <button class="btn btnPrimary" type="button" id="btnOpenPayLink">Abrir ${m.label}</button>
+          <button class="btn btnGhost" type="button" id="btnSendPayLink">Enviar link</button>
+        </div>
+        <div class="linkMeta">Proveedor: ${domain}</div>
+      </div>
+    `;
+    document.getElementById("btnOpenPayLink").onclick = ()=> window.open(m.link, "_blank");
+    document.getElementById("btnSendPayLink").onclick = async ()=>{
+      const text = `Link de pago (${m.label}): ${m.link}`;
+      const shared = await shareText("Link de pago", text);
+      if(!shared){
+        const ok = await copyToClipboard(m.link);
+        alert(ok ? "Link copiado ✅" : "No se pudo copiar. Intenta manual.");
+      }
+    };
+
+    payHint.textContent = "Abre o envía el link. Luego marca “Pago completado (manual)”.";
+    return;
   }
 
-  if(m.mode==="manual"){
-    payArea.innerHTML = `
-      <div class="linkBox">
-        <div><b>Modo manual:</b></div>
-        <div>Marca “Pago completado” cuando recibas el pago.</div>
-      </div>`;
-    payHint.textContent = "Cash/Checks: confirmación manual + ticket para control.";
-  }
+  // manual
+  payArea.innerHTML = `
+    <div class="linkCard">
+      <div class="linkMeta"><b>Modo manual:</b> confirma cuando recibas el pago.</div>
+    </div>`;
+  payHint.textContent = "Cash/Checks: confirmación manual + recibo para control.";
 }
 
 // ===== Firestore =====
@@ -428,16 +457,18 @@ async function loadPaymentsCloud(limit=60){
   return snap.docs.map(d=>({ id:d.id, ...d.data() }));
 }
 
-// ===== Ticket + compartir =====
+// ===== Ticket (jsPDF real) =====
 async function printReceipt(payment){
   const { jsPDF } = window.jspdf;
+
+  // 80mm (ancho ticket) x 170mm (alto)
   const doc = new jsPDF({ unit:"mm", format:[80,170] });
 
   let y=10;
   const line=(txt,size=10,bold=false)=>{
     doc.setFont("courier", bold ? "bold" : "normal");
     doc.setFontSize(size);
-    doc.text(String(txt).slice(0,40), 6, y);
+    doc.text(String(txt).slice(0,44), 6, y);
     y+=5;
   };
 
@@ -448,17 +479,17 @@ async function printReceipt(payment){
   line(CONFIG.brand.business,10,true);
   line(`Tel: ${CONFIG.brand.phone}`,9,false);
   line(CONFIG.brand.location,9,false);
-  y+=2; line("--------------------------------",9,false);
+  y+=2; line("--------------------------------------------",9,false);
 
   line(`Recibo: ${payment.receiptNo}`,9,true);
   line(`Fecha: ${payment.dateText}`,9,false);
-  y+=1; line("--------------------------------",9,false);
+  y+=1; line("--------------------------------------------",9,false);
 
   line("CLIENTE",9,true);
   line(`Nombre: ${payment.customerName}`,9,false);
   if(payment.phone) line(`Telefono: ${payment.phone}`,9,false);
 
-  y+=1; line("--------------------------------",9,false);
+  y+=1; line("--------------------------------------------",9,false);
 
   line("PAGO",9,true);
   line(`Metodo: ${payment.method}`,9,false);
@@ -475,13 +506,14 @@ async function printReceipt(payment){
     y+=2;
   }
 
-  line("--------------------------------",9,false);
+  line("--------------------------------------------",9,false);
   line("Gracias por su pago.",9,false);
 
   const filename = `${payment.receiptNo}.pdf`;
   const blob = doc.output("blob");
   const file = new File([blob], filename, { type:"application/pdf" });
 
+  // iPhone Share Sheet
   if(navigator.share && navigator.canShare && navigator.canShare({ files:[file] })){
     try{
       await navigator.share({
@@ -491,7 +523,7 @@ async function printReceipt(payment){
       });
       return;
     }catch(err){
-      console.warn("Share cancelado/falló:", err);
+      // si cancela o falla, cae al save
     }
   }
   doc.save(filename);
@@ -501,6 +533,7 @@ async function printReceipt(payment){
 btnPaid.onclick = async ()=>{
   try{
     const m=state.method, f=state.form;
+
     const payment = {
       receiptNo: receiptNo(),
       dateISO: new Date().toISOString(),
@@ -513,8 +546,10 @@ btnPaid.onclick = async ()=>{
       status: "PAGADO"
     };
 
+    // Local primero (resiliencia)
     pushLocalPayment({ ...payment, _local:true });
 
+    // Cloud
     try{ await savePaymentCloud(payment); }
     catch(err){ console.warn("Cloud save failed, queda local.", err); }
 
@@ -533,9 +568,10 @@ btnRefresh.onclick = ()=> refreshHistory();
 btnClearLocal.onclick = ()=>{ localStorage.removeItem(LS_PAY); refreshHistory(); };
 
 async function refreshHistory(){
-  historyTableBody.innerHTML = `<tr><td colspan="6">Cargando...</td></tr>`;
+  historyTableBody.innerHTML = `<tr><td colspan="6">Cargando…</td></tr>`;
   let rows=[];
 
+  // Cloud
   try{
     const cloud=await loadPaymentsCloud(60);
     rows = cloud.map(p=>({
@@ -547,9 +583,10 @@ async function refreshHistory(){
       raw: p
     }));
   }catch(err){
-    console.warn("Cloud load failed, usando local.", err);
+    console.warn("Cloud load failed:", err);
   }
 
+  // Fallback local
   if(rows.length===0){
     const local=getLocalPayments();
     rows = local.slice(0,60).map(p=>({
@@ -563,7 +600,7 @@ async function refreshHistory(){
   }
 
   if(rows.length===0){
-    historyTableBody.innerHTML = `<tr><td colspan="6">No hay pagos aún.</td></tr>`;
+    historyTableBody.innerHTML = `<tr><td colspan="6">Sin registros.</td></tr>`;
     return;
   }
 
@@ -576,7 +613,7 @@ async function refreshHistory(){
       <td>${r.method}</td>
       <td class="r">$${money(r.amount)}</td>
       <td>${r.receipt}</td>
-      <td><button class="btn btnGhost">Compartir</button></td>
+      <td><button class="btn btnGhost" type="button">Compartir</button></td>
     `;
     tr.querySelector("button").onclick = async ()=>{
       const p=r.raw;
@@ -596,22 +633,7 @@ async function refreshHistory(){
   });
 }
 
-function renderMethods(){ /* (mantengo la firma para hoisting) */ }
-renderMethods = function(){
-  methodsGrid.innerHTML = "";
-  METHODS.forEach(m=>{
-    const btn=document.createElement("button");
-    btn.className="iconBtn";
-    btn.type="button";
-    btn.innerHTML = `
-      <div class="iconInner">
-        <div class="iconGlass"><img class="iconImg" src="${m.icon}" alt="${m.label}"></div>
-        <div class="iconName">${m.label}</div>
-      </div>`;
-    btn.onclick=()=>selectMethod(m.id);
-    methodsGrid.appendChild(btn);
-  });
-};
-
+// ===== INIT =====
 renderMethods();
 go(screenMethods);
+renderPayScreen();
