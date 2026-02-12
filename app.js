@@ -24,7 +24,7 @@ const db = firebase.firestore();
 
 // ===== Config negocio/links =====
 const CONFIG = {
-  brand: { business: "Nexus POS Express", phone: "787-664-3079", location: "Puerto Rico" },
+  brand: { business: "Oasis Services P.R. / Nexus POS Express", phone: "787-664-3079", location: "Trujillo Alto" },
   links: {
     ath: "https://pagos.athmovilapp.com/pagoPorCodigo.html?id=8fbf89be-ac6a-4a00-b4d8-a7020c474660",
     stripe: "https://buy.stripe.com/5kQ9AS8nQ2mA6w6aFV1RC0h",
