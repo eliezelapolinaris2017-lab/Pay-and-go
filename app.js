@@ -1,573 +1,472 @@
-/*************************************************
- * Nexus POS Express — Pay-and-go
- * app.js — Firebase + Cache local + jsPDF Receipt
- *************************************************/
+/********************************************************
+ Nexus POS — Payment Platform (FINAL)
+ - assets/bg.png
+ - icons: assets/icons/*.png
+ - qrs: assets/icons/ath-qr.png / stripe-qr.png
+ - Firebase: users/{uid}/payments
+ - PIN local (4 dígitos) + cambiar PIN
+ - Ticket: jsPDF + Share (Mensajes)
+*********************************************************/
 
-(() => {
-  // ========== DOM ==========
-  const $ = (id) => document.getElementById(id);
+const CONFIG = {
+  brand: { business: "Nexus Payments", phone: "787-664-3079", location: "Puerto Rico" },
+  links: { tapToPay: "https://example.com/tap-to-pay" }, // edita si quieres
+  icons: {
+    stripe: "assets/icons/stripe.png",
+    ath: "assets/icons/ath.png",
+    tap: "assets/icons/tap.png",
+    cash: "assets/icons/cash.png",
+    checks: "assets/icons/checks.png"
+  },
+  qrs: {
+    stripe: "assets/icons/stripe-qr.png",
+    ath: "assets/icons/ath-qr.png"
+  }
+};
 
-  const viewMethods = $("viewMethods");
-  const viewRegistro = $("viewRegistro");
-  const viewCobro = $("viewCobro");
+// ===== Firebase =====
+const firebaseConfig = {
+  apiKey: "AIzaSyAabJd7_zxocAktRlERRv3BHCYpfyiF4ig",
+  authDomain: "nexus-payment-platform.firebaseapp.com",
+  projectId: "nexus-payment-platform",
+  storageBucket: "nexus-payment-platform.firebasestorage.app",
+  messagingSenderId: "482375789187",
+  appId: "1:482375789187:web:e13839db6d644e215009b6"
+};
 
-  const pageTitle = $("pageTitle");
-  const pageSub = $("pageSub");
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
 
-  const pillMetodo = $("pillMetodo");
-  const cobroMetodoPill = $("cobroMetodoPill");
+// ===== UI refs =====
+const screenMethods = document.getElementById("screenMethods");
+const screenRegister = document.getElementById("screenRegister");
+const screenPay = document.getElementById("screenPay");
 
-  const registroForm = $("registroForm");
-  const volverBtn = $("volverBtn");
-  const editarBtn = $("editarBtn");
-  const pagadoBtn = $("pagadoBtn");
+const methodsGrid = document.getElementById("methodsGrid");
+const methodBadge = document.getElementById("methodBadge");
+const payBadge = document.getElementById("payBadge");
 
-  const qrArea = $("qrArea");
-  const qrImg = $("qrImg");
-  const linkArea = $("linkArea");
-  const openLinkBtn = $("openLinkBtn");
-  const shareLinkBtn = $("shareLinkBtn");
+const payForm = document.getElementById("payForm");
+const nameEl = document.getElementById("name");
+const phoneEl = document.getElementById("phone");
+const amountEl = document.getElementById("amount");
+const noteEl = document.getElementById("note");
 
-  const openHistoryBtn = $("openHistoryBtn");
-  const modal = $("modal");
-  const closeModalBtn = $("closeModalBtn");
-  const syncBtn = $("syncBtn");
-  const refreshBtn = $("refreshBtn");
-  const changePinBtn = $("changePinBtn");
-  const clearCacheBtn = $("clearCacheBtn");
-  const tbody = $("tbody");
+const payArea = document.getElementById("payArea");
+const payHint = document.getElementById("payHint");
 
-  // PIN
-  const pinLock = $("pinLock");
-  const pinInput = $("pinInput");
-  const pinEnterBtn = $("pinEnterBtn");
-  const pinResetBtn = $("pinResetBtn");
+const btnBack = document.getElementById("btnBack");
+const btnEdit = document.getElementById("btnEdit");
+const btnPaid = document.getElementById("btnPaid");
 
-  // Inputs
-  const nombre = $("nombre");
-  const telefono = $("telefono");
-  const monto = $("monto");
-  const nota = $("nota");
+const btnHistory = document.getElementById("btnHistory");
+const historyModal = document.getElementById("historyModal");
+const btnCloseHistory = document.getElementById("btnCloseHistory");
+const btnRefresh = document.getElementById("btnRefresh");
+const btnClearLocal = document.getElementById("btnClearLocal");
+const btnSync = document.getElementById("btnSync");
+const btnChangePin = document.getElementById("btnChangePin");
+const historyTableBody = document.querySelector("#historyTable tbody");
 
-  // ========== LINKS (los que me diste) ==========
-  const PAYMENT_LINKS = {
-    ath_link: "https://pagos.athmovilapp.com/pagoPorCodigo.html?id=8fbf89be-ac6a-4a00-b4d8-a7020c474660",
-    stripe_link: "https://buy.stripe.com/5kQ9AS8nQ2mA6w6aFV1RC0h"
-  };
+// PIN UI
+const pinModal = document.getElementById("pinModal");
+const pinTitle = document.getElementById("pinTitle");
+const pinSub = document.getElementById("pinSub");
+const pinDots = document.getElementById("pinDots");
+const pinPad = document.getElementById("pinPad");
+const pinBackspace = document.getElementById("pinBackspace");
+const pinSubmit = document.getElementById("pinSubmit");
+const pinHint = document.getElementById("pinHint");
 
-  // ========== METHODS ==========
-  const METHOD_LABEL = {
-    stripe: "Stripe",
-    ath: "ATH Móvil",
-    tap: "Tap to Pay",
-    cash: "Cash",
-    checks: "Checks",
-    stripe_link: "Stripe Link",
-    ath_link: "ATH Link"
-  };
+// ===== Métodos =====
+const METHODS = [
+  { id:"stripe", label:"Stripe", icon: CONFIG.icons.stripe, mode:"qr" },
+  { id:"ath", label:"ATH Móvil", icon: CONFIG.icons.ath, mode:"qr" },
+  { id:"tap", label:"Tap to Pay", icon: CONFIG.icons.tap, mode:"link", link: () => CONFIG.links.tapToPay },
+  { id:"cash", label:"Cash", icon: CONFIG.icons.cash, mode:"manual" },
+  { id:"checks", label:"Checks", icon: CONFIG.icons.checks, mode:"manual" }
+];
 
-  const METHOD_QR = {
-    stripe: "assets/qr-stripe.png",
-    ath: "assets/qr-ath.png"
-  };
+const state = { method:null, form:{ name:"", phone:"", amount:"", note:"" } };
 
-  // ========== STATE ==========
-  const store = {
-    method: null,
-    draft: null,       // datos de la transacción actual
-    lastLink: null     // link oculto del cobro
-  };
+// ===== Local cache =====
+const LS_PAY = "nexus_pos_payments_cache";
+const LS_PIN = "nexus_pos_pin_hash_v1";
 
-  // Cache local
-  const CACHE_KEY = "NEXUS_POS_CACHE_V1";
-  const PIN_KEY = "NEXUS_POS_PIN_V1";
+function getLocalPayments(){ try{return JSON.parse(localStorage.getItem(LS_PAY)||"[]");}catch{return[];} }
+function setLocalPayments(arr){ localStorage.setItem(LS_PAY, JSON.stringify(arr)); }
+function pushLocalPayment(p){ const arr=getLocalPayments(); arr.unshift(p); setLocalPayments(arr); }
 
-  const getCache = () => {
-    try { return JSON.parse(localStorage.getItem(CACHE_KEY) || "[]"); }
-    catch { return []; }
-  };
-  const setCache = (rows) => localStorage.setItem(CACHE_KEY, JSON.stringify(rows || []));
+// ===== Helpers =====
+function show(el){ el.classList.remove("hidden"); }
+function hide(el){ el.classList.add("hidden"); }
+function go(to){ [screenMethods, screenRegister, screenPay].forEach(hide); show(to); window.scrollTo({top:0,behavior:"smooth"}); }
+function money(n){ return (Number(n||0)).toFixed(2); }
+function safeText(s){ return String(s ?? "").trim(); }
+function pad2(v){ return String(v).padStart(2,"0"); }
+function nowStamp(){ const d=new Date(); return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`; }
+function receiptNo(){ return `R-${nowStamp()}`; }
+function currentUID(){ return auth.currentUser?.uid || null; }
+function fmtDate(v){
+  if(!v) return "—";
+  if(typeof v === "string") return new Date(v).toLocaleString("es-PR");
+  if(v.seconds) return new Date(v.seconds*1000).toLocaleString("es-PR");
+  return "—";
+}
+function isiOS(){ return /iPhone|iPad|iPod/i.test(navigator.userAgent || ""); }
 
-  // ========== FIREBASE ==========
-  // TODO: pega tu config aquí (el objeto completo)
-  const firebaseConfig = {
-    apiKey: "AIzaSyAabJd7_zxocAktRlERRv3BHCYpfyiF4ig",
-    authDomain: "nexus-payment-platform.firebaseapp.com",
-    projectId: "nexus-payment-platform",
-    storageBucket: "nexus-payment-platform.firebasestorage.app",
-    messagingSenderId: "482375789187",
-    appId: "1:482375789187:web:e13839db6d644e215009b6"
-  };
+// ===== PIN SHA-256 =====
+async function sha256(text){
+  const enc = new TextEncoder().encode(text);
+  const hash = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+function pinStoredHash(){ return localStorage.getItem(LS_PIN) || ""; }
 
-  let db = null;
-  let firebaseReady = false;
+let pinBuffer = "";
+let pinMode = "verify"; // verify | setup | change
+let pinSetupFirst = "";
+let pinUnlocked = false;
 
-  function initFirebase() {
-    try {
-      if (!firebaseConfig || !firebaseConfig.projectId) {
-        console.warn("Firebase config no está pegado.");
-        return;
-      }
-      firebase.initializeApp(firebaseConfig);
-      db = firebase.firestore();
-      firebaseReady = true;
-    } catch (e) {
-      console.warn("Firebase init falló:", e);
-      firebaseReady = false;
+function renderDots(){
+  pinDots.innerHTML = "";
+  for(let i=0;i<4;i++){
+    const d=document.createElement("div");
+    d.className = "pinDot" + (i < pinBuffer.length ? " filled" : "");
+    pinDots.appendChild(d);
+  }
+}
+function pinSetHint(msg){ pinHint.textContent = msg || ""; }
+
+function buildPinPad(){
+  pinPad.innerHTML = "";
+  const layout = ["1","2","3","4","5","6","7","8","9","0"];
+  layout.forEach(k=>{
+    const b=document.createElement("button");
+    b.className="pinKey";
+    b.type="button";
+    b.textContent = k;
+    b.onclick = ()=>{ if(pinBuffer.length<4){ pinBuffer += k; renderDots(); } };
+    pinPad.appendChild(b);
+  });
+}
+
+function openPin(mode){
+  pinMode = mode;
+  pinBuffer = "";
+  pinSetupFirst = "";
+  pinSetHint("");
+
+  const hasPin = !!pinStoredHash();
+
+  if(mode === "verify"){
+    pinTitle.textContent = "Bloqueo — Nexus POS";
+    pinSub.textContent = hasPin ? "Entra tu PIN para continuar." : "Crea un PIN (4 dígitos) para proteger la app.";
+  } else if(mode === "setup"){
+    pinTitle.textContent = "Crear PIN";
+    pinSub.textContent = "Entra un PIN de 4 dígitos.";
+  } else if(mode === "change"){
+    pinTitle.textContent = "Cambiar PIN";
+    pinSub.textContent = "Primero confirma tu PIN actual.";
+  }
+
+  renderDots();
+  pinModal.classList.remove("hidden");
+}
+function closePin(){
+  pinModal.classList.add("hidden");
+  pinUnlocked = true;
+}
+
+async function pinSubmitFlow(){
+  const hasPin = !!pinStoredHash();
+
+  if(!hasPin && pinMode==="verify"){
+    pinMode = "setup";
+    pinTitle.textContent = "Crear PIN";
+    pinSub.textContent = "Entra un PIN de 4 dígitos.";
+  }
+
+  if(pinBuffer.length !== 4){
+    pinSetHint("PIN incompleto. Son 4 dígitos.");
+    return;
+  }
+
+  if(pinMode === "verify"){
+    const enteredHash = await sha256(pinBuffer);
+    if(enteredHash === pinStoredHash()){
+      closePin();
+    }else{
+      pinSetHint("PIN incorrecto.");
+      pinBuffer = "";
+      renderDots();
     }
+    return;
   }
 
-  // ========== NAV ==========
-  function show(view) {
-    viewMethods.classList.add("hidden");
-    viewRegistro.classList.add("hidden");
-    viewCobro.classList.add("hidden");
-    view.classList.remove("hidden");
-  }
-
-  function setHeader(title, sub) {
-    pageTitle.textContent = title;
-    pageSub.textContent = sub;
-  }
-
-  function formatMoney(n) {
-    const x = Number(n || 0);
-    return x.toLocaleString("en-US", { style:"currency", currency:"USD" });
-  }
-
-  function nowStamp() {
-    // R-YYYYMMDD-HHMMSS
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth()+1).padStart(2,"0");
-    const dd = String(d.getDate()).padStart(2,"0");
-    const hh = String(d.getHours()).padStart(2,"0");
-    const mi = String(d.getMinutes()).padStart(2,"0");
-    const ss = String(d.getSeconds()).padStart(2,"0");
-    return `R-${yyyy}${mm}${dd}-${hh}${mi}${ss}`;
-  }
-
-  function methodIsLink(m) {
-    return m === "ath_link" || m === "stripe_link";
-  }
-
-  function methodHasQR(m) {
-    return m === "ath" || m === "stripe";
-  }
-
-  // ========== PIN ==========
-  function getPin() {
-    return localStorage.getItem(PIN_KEY) || "1234";
-  }
-  function setPin(p) {
-    localStorage.setItem(PIN_KEY, String(p || "").trim());
-  }
-
-  function requirePin() {
-    pinLock.classList.remove("hidden");
-    pinInput.value = "";
-    setTimeout(()=>pinInput.focus(), 50);
-  }
-
-  function unlockPin() {
-    pinLock.classList.add("hidden");
-  }
-
-  function checkPin() {
-    const entered = String(pinInput.value || "").trim();
-    if (!entered) return;
-    if (entered === getPin()) unlockPin();
-    else alert("PIN incorrecto.");
-  }
-
-  // ========== HISTORIAL (UI) ==========
-  function renderHistory(rows) {
-    tbody.innerHTML = "";
-
-    if (!rows || !rows.length) {
-      const empty = document.createElement("div");
-      empty.className = "row";
-      empty.innerHTML = `
-        <div class="muted">$0.00</div>
-        <div class="muted">Sin registros</div>
-        <div></div>
-      `;
-      tbody.appendChild(empty);
+  if(pinMode === "setup"){
+    if(!pinSetupFirst){
+      pinSetupFirst = pinBuffer;
+      pinBuffer = "";
+      renderDots();
+      pinSub.textContent = "Confirma el PIN (mismos 4 dígitos).";
+      pinSetHint("");
       return;
     }
-
-    for (const r of rows) {
-      const row = document.createElement("div");
-      row.className = "row";
-      row.innerHTML = `
-        <div class="muted">${formatMoney(r.amount)}</div>
-        <div class="muted">${r.receiptId || "—"}</div>
-        <div><button class="btn-mini" data-id="${r.receiptId}">Compartir</button></div>
-      `;
-      tbody.appendChild(row);
+    if(pinSetupFirst !== pinBuffer){
+      pinSetHint("No coincide. Intenta de nuevo.");
+      pinSetupFirst = "";
+      pinBuffer = "";
+      renderDots();
+      pinSub.textContent = "Entra un PIN de 4 dígitos.";
+      return;
     }
+    const h = await sha256(pinBuffer);
+    localStorage.setItem(LS_PIN, h);
+    pinSetHint("PIN guardado ✅");
+    setTimeout(()=>closePin(), 400);
+    return;
+  }
 
-    tbody.querySelectorAll(".btn-mini").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        const id = btn.getAttribute("data-id");
-        const r = rows.find(x => x.receiptId === id);
-        if (!r) return;
-        const pdf = await buildReceiptPDF(r);
-        await shareOrOpenPDF(pdf, `Recibo-${id}.pdf`);
+  if(pinMode === "change"){
+    const enteredHash = await sha256(pinBuffer);
+    if(enteredHash !== pinStoredHash()){
+      pinSetHint("PIN actual incorrecto.");
+      pinBuffer = "";
+      renderDots();
+      return;
+    }
+    pinMode = "setup";
+    pinTitle.textContent = "Nuevo PIN";
+    pinSub.textContent = "Entra el nuevo PIN (4 dígitos).";
+    pinSetHint("");
+    pinBuffer = "";
+    renderDots();
+    pinSetupFirst = "";
+  }
+}
+
+pinBackspace.onclick = ()=>{
+  if(pinBuffer.length>0){
+    pinBuffer = pinBuffer.slice(0,-1);
+    renderDots();
+  }
+};
+pinSubmit.onclick = pinSubmitFlow;
+
+buildPinPad();
+renderDots();
+(pinStoredHash() ? openPin("verify") : openPin("setup"));
+
+// ===== Auth anonymous =====
+auth.signInAnonymously().catch(console.error);
+
+// ===== Sync Google (en Historial) =====
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
+
+auth.onAuthStateChanged(async (user)=>{
+  if(!user){
+    try{ await auth.signInAnonymously(); }catch(e){ console.warn(e); }
+    return;
+  }
+  if(btnSync){
+    btnSync.textContent = user.isAnonymous ? "Sync Google" : "Google OK";
+  }
+});
+
+async function linkAnonymousToGoogle(){
+  const user = auth.currentUser;
+  if(!user) return alert("Auth no listo todavía.");
+
+  if(!user.isAnonymous){
+    alert("Google ya está conectado ✅");
+    return;
+  }
+
+  try{
+    if(isiOS()){
+      await user.linkWithRedirect(googleProvider);
+      return;
+    }else{
+      await user.linkWithPopup(googleProvider);
+      alert("Google conectado ✅ Historial unificado.");
+    }
+  }catch(err){
+    console.warn("Google link error:", err);
+    alert("No se pudo conectar Google. Revisa Authorized Domains en Firebase Auth.");
+  }
+}
+
+btnSync.addEventListener("click", linkAnonymousToGoogle);
+btnChangePin.addEventListener("click", ()=> openPin("change"));
+
+// ===== Render métodos =====
+function renderMethods(){
+  methodsGrid.innerHTML = "";
+  METHODS.forEach(m=>{
+    const btn=document.createElement("button");
+    btn.className="iconBtn";
+    btn.type="button";
+    btn.innerHTML = `
+      <div class="iconInner">
+        <div class="iconGlass"><img class="iconImg" src="${m.icon}" alt="${m.label}"></div>
+        <div class="iconName">${m.label}</div>
+      </div>`;
+    btn.onclick=()=>selectMethod(m.id);
+    methodsGrid.appendChild(btn);
+  });
+}
+
+function selectMethod(id){
+  if(!pinUnlocked && !pinModal.classList.contains("hidden")) return;
+  state.method = METHODS.find(m=>m.id===id);
+  methodBadge.textContent = `Método: ${state.method.label}`;
+  nameEl.value=""; phoneEl.value=""; amountEl.value=""; noteEl.value="";
+  go(screenRegister);
+}
+
+btnBack.onclick = ()=> go(screenMethods);
+btnEdit.onclick = ()=> go(screenRegister);
+
+// ===== Registro =====
+payForm.addEventListener("submit",(e)=>{
+  e.preventDefault();
+  state.form.name = safeText(nameEl.value);
+  state.form.phone = safeText(phoneEl.value);
+  state.form.amount = safeText(amountEl.value);
+  state.form.note = safeText(noteEl.value);
+  renderPayScreen();
+  go(screenPay);
+});
+
+// ===== Cobro =====
+function renderPayScreen(){
+  const m=state.method, f=state.form;
+  payBadge.textContent = `Método: ${m.label} — Total $${money(f.amount)}`;
+  payArea.innerHTML=""; payHint.textContent="";
+
+  if(m.mode==="qr"){
+    const qrSrc = m.id==="stripe" ? CONFIG.qrs.stripe : CONFIG.qrs.ath;
+    payArea.innerHTML = `<div class="qrBox"><img src="${qrSrc}" alt="QR ${m.label}"></div>`;
+    payHint.textContent = "El cliente escanea el QR. Luego marca “Pago completado (manual)”.";
+  }
+
+  if(m.mode==="link"){
+    const link=m.link();
+    payArea.innerHTML = `
+      <div class="linkBox">
+        <div><b>Link:</b></div>
+        <a href="${link}" target="_blank" rel="noopener">${link}</a>
+        <button class="btn btnPrimary" type="button" id="btnOpenLink">Abrir</button>
+      </div>`;
+    document.getElementById("btnOpenLink").onclick=()=>window.open(link,"_blank");
+    payHint.textContent = "Abre el enlace y confirma manual cuando esté pago.";
+  }
+
+  if(m.mode==="manual"){
+    payArea.innerHTML = `
+      <div class="linkBox">
+        <div><b>Modo manual:</b></div>
+        <div>Marca “Pago completado” cuando recibas el pago.</div>
+      </div>`;
+    payHint.textContent = "Cash/Checks: confirmación manual + ticket para control.";
+  }
+}
+
+// ===== Firestore =====
+async function savePaymentCloud(payment){
+  const uid=currentUID();
+  if(!uid) throw new Error("Auth no disponible.");
+  await db.collection("users").doc(uid).collection("payments").add({
+    ...payment,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+}
+async function loadPaymentsCloud(limit=60){
+  const uid=currentUID();
+  if(!uid) throw new Error("Auth no disponible.");
+  const snap = await db.collection("users").doc(uid).collection("payments")
+    .orderBy("createdAt","desc")
+    .limit(limit)
+    .get();
+  return snap.docs.map(d=>({ id:d.id, ...d.data() }));
+}
+
+// ===== Ticket + compartir =====
+async function printReceipt(payment){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:"mm", format:[80,170] });
+
+  let y=10;
+  const line=(txt,size=10,bold=false)=>{
+    doc.setFont("courier", bold ? "bold" : "normal");
+    doc.setFontSize(size);
+    doc.text(String(txt).slice(0,40), 6, y);
+    y+=5;
+  };
+
+  doc.setFont("courier","bold");
+  doc.setFontSize(12);
+  doc.text("RECIBO DE PAGO", 6, y); y+=7;
+
+  line(CONFIG.brand.business,10,true);
+  line(`Tel: ${CONFIG.brand.phone}`,9,false);
+  line(CONFIG.brand.location,9,false);
+  y+=2; line("--------------------------------",9,false);
+
+  line(`Recibo: ${payment.receiptNo}`,9,true);
+  line(`Fecha: ${payment.dateText}`,9,false);
+  y+=1; line("--------------------------------",9,false);
+
+  line("CLIENTE",9,true);
+  line(`Nombre: ${payment.customerName}`,9,false);
+  if(payment.phone) line(`Telefono: ${payment.phone}`,9,false);
+
+  y+=1; line("--------------------------------",9,false);
+
+  line("PAGO",9,true);
+  line(`Metodo: ${payment.method}`,9,false);
+  line(`Estado: ${payment.status}`,9,false);
+
+  y+=2;
+  doc.setFont("courier","bold");
+  doc.setFontSize(12);
+  doc.text(`TOTAL: $${money(payment.amount)}`, 6, y); y+=8;
+
+  if(payment.note){
+    line("NOTA",9,true);
+    line(payment.note,9,false);
+    y+=2;
+  }
+
+  line("--------------------------------",9,false);
+  line("Gracias por su pago.",9,false);
+
+  const filename = `${payment.receiptNo}.pdf`;
+  const blob = doc.output("blob");
+  const file = new File([blob], filename, { type:"application/pdf" });
+
+  if(navigator.share && navigator.canShare && navigator.canShare({ files:[file] })){
+    try{
+      await navigator.share({
+        title: "Recibo de pago",
+        text: `Recibo ${payment.receiptNo} — ${payment.customerName} — $${money(payment.amount)}`,
+        files: [file]
       });
-    });
-  }
-
-  function openModal() {
-    modal.classList.remove("hidden");
-    refreshHistory();
-  }
-
-  function closeModal() {
-    modal.classList.add("hidden");
-  }
-
-  async function refreshHistory() {
-    // Firebase primero, si falla -> cache local
-    if (firebaseReady) {
-      try {
-        const snap = await db.collection("receipts").orderBy("createdAt", "desc").limit(50).get();
-        const rows = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-          .map(r => ({
-            receiptId: r.receiptId,
-            createdAt: r.createdAt?.toDate ? r.createdAt.toDate().toISOString() : (r.createdAt || ""),
-            name: r.name || "",
-            phone: r.phone || "",
-            note: r.note || "",
-            method: r.method || "",
-            amount: Number(r.amount || 0),
-            status: r.status || "PAGADO",
-            payLink: r.payLink || ""
-          }));
-
-        setCache(rows);
-        renderHistory(rows);
-        return;
-      } catch (e) {
-        console.warn("History Firebase falló, usando cache:", e);
-      }
-    }
-
-    renderHistory(getCache());
-  }
-
-  async function syncGoogle() {
-    // “Sync Google” = refresh forzado desde Firebase
-    if (!firebaseReady) {
-      alert("Firebase no está disponible ahora mismo.");
       return;
-    }
-    await refreshHistory();
-    alert("Sync completado.");
+    }catch(err){}
   }
+  doc.save(filename);
+}
 
-  function clearLocalCache() {
-    setCache([]);
-    refreshHistory();
-  }
-
-  async function changePinFlow() {
-    const current = prompt("PIN actual:");
-    if (current === null) return;
-    if (String(current).trim() !== getPin()) {
-      alert("PIN actual incorrecto.");
-      return;
-    }
-    const next = prompt("Nuevo PIN (4+ dígitos):");
-    if (next === null) return;
-    if (String(next).trim().length < 4) {
-      alert("PIN muy corto.");
-      return;
-    }
-    setPin(String(next).trim());
-    alert("PIN actualizado.");
-  }
-
-  // ========== FLOW ==========
-  function startRegistro(method) {
-    store.method = method;
-    store.draft = null;
-    store.lastLink = null;
-
-    pillMetodo.textContent = `Método: ${METHOD_LABEL[method] || method}`;
-    setHeader("Registro", "Completa los datos para ticket e historial.");
-
-    // limpiar form
-    registroForm.reset();
-    show(viewRegistro);
-  }
-
-  function startCobro(draft) {
-    store.draft = draft;
-
-    const label = METHOD_LABEL[draft.method] || draft.method;
-    cobroMetodoPill.textContent = `Método: ${label} — Total ${formatMoney(draft.amount)}`;
-
-    // QR / Link areas
-    qrArea.classList.add("hidden");
-    linkArea.classList.add("hidden");
-
-    if (methodHasQR(draft.method)) {
-      qrImg.src = METHOD_QR[draft.method];
-      qrArea.classList.remove("hidden");
-    }
-
-    if (methodIsLink(draft.method)) {
-      // URL oculto
-      store.lastLink = PAYMENT_LINKS[draft.method];
-      linkArea.classList.remove("hidden");
-    }
-
-    setHeader("Cobro", "Muestra QR o abre enlace. Luego marca “Pago completado”.");
-    show(viewCobro);
-  }
-
-  function backToMethods() {
-    store.method = null;
-    store.draft = null;
-    store.lastLink = null;
-    setHeader("Select Payment Method", "Selecciona el método. Luego registras el cliente y cobras.");
-    show(viewMethods);
-  }
-
-  // ========== PDF (jsPDF) ==========
-  async function buildReceiptPDF(r) {
-    const { jsPDF } = window.jspdf;
-
-    // Formato “ticket”
-    const doc = new jsPDF({
-      unit: "pt",
-      format: [320, 620] // tamaño tipo recibo
-    });
-
-    const pad = 18;
-    let y = 28;
-
-    doc.setFont("courier", "bold");
-    doc.setFontSize(18);
-    doc.text("RECIBO DE PAGO", pad, y);
-
-    y += 26;
-    doc.setFont("courier", "normal");
-    doc.setFontSize(12);
-    doc.text("Nexus Payments", pad, y); y += 16;
-    doc.text("Tel: 787-664-3079", pad, y); y += 16;
-    doc.text("Puerto Rico", pad, y); y += 16;
-
-    y += 8;
-    doc.text("----------------------------------------", pad, y); y += 22;
-
-    doc.setFont("courier", "bold");
-    doc.text(`Recibo: ${r.receiptId}`, pad, y); y += 18;
-
-    doc.setFont("courier", "normal");
-    const d = r.createdAt ? new Date(r.createdAt) : new Date();
-    doc.text(`Fecha: ${d.toLocaleString("es-PR")}`, pad, y); y += 18;
-
-    y += 6;
-    doc.text("----------------------------------------", pad, y); y += 22;
-
-    doc.setFont("courier", "bold");
-    doc.text("CLIENTE", pad, y); y += 18;
-
-    doc.setFont("courier", "normal");
-    doc.text(`Nombre: ${r.name || "—"}`, pad, y); y += 18;
-    doc.text(`Telefono: ${r.phone || "—"}`, pad, y); y += 18;
-
-    y += 6;
-    doc.text("----------------------------------------", pad, y); y += 22;
-
-    doc.setFont("courier", "bold");
-    doc.text("PAGO", pad, y); y += 18;
-
-    doc.setFont("courier", "normal");
-    doc.text(`Metodo: ${METHOD_LABEL[r.method] || r.method}`, pad, y); y += 18;
-    doc.text(`Estado: ${r.status || "PAGADO"}`, pad, y); y += 18;
-
-    y += 6;
-    doc.setFont("courier", "bold");
-    doc.setFontSize(16);
-    doc.text(`TOTAL: ${formatMoney(r.amount)}`, pad, y); y += 22;
-
-    doc.setFontSize(12);
-    doc.setFont("courier", "bold");
-    doc.text("NOTA", pad, y); y += 18;
-
-    doc.setFont("courier", "normal");
-    const note = (r.note || "—").slice(0, 80);
-    doc.text(note, pad, y);
-
-    y += 28;
-    doc.text("----------------------------------------", pad, y); y += 20;
-    doc.text("Gracias por su pago.", pad, y);
-
-    return doc.output("blob");
-  }
-
-  async function shareOrOpenPDF(blob, filename) {
-    try {
-      // Web Share (iOS moderno)
-      if (navigator.canShare && navigator.canShare({ files: [new File([blob], filename, { type: "application/pdf" })] })) {
-        await navigator.share({
-          files: [new File([blob], filename, { type: "application/pdf" })],
-          title: "Recibo",
-          text: "Recibo de pago"
-        });
-        return;
-      }
-    } catch (_) {}
-
-    // fallback: abrir en nueva pestaña
-    const url = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  }
-
-  // ========== SAVE RECEIPT ==========
-  async function saveReceipt(r) {
-    // 1) cache local
-    const rows = getCache();
-    rows.unshift(r);
-    setCache(rows.slice(0, 200));
-
-    // 2) firebase
-    if (firebaseReady) {
-      try {
-        await db.collection("receipts").add({
-          receiptId: r.receiptId,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          name: r.name || "",
-          phone: r.phone || "",
-          note: r.note || "",
-          method: r.method,
-          amount: Number(r.amount || 0),
-          status: r.status || "PAGADO",
-          payLink: r.payLink || ""
-        });
-      } catch (e) {
-        console.warn("Guardar en Firebase falló, queda en cache:", e);
-      }
-    }
-  }
-
-  // ========== EVENTS ==========
-  // selección de métodos
-  document.querySelectorAll(".pay-icon-btn").forEach(btn => {
-    btn.addEventListener("click", () => startRegistro(btn.getAttribute("data-method")));
-  });
-
-  volverBtn.addEventListener("click", backToMethods);
-  editarBtn.addEventListener("click", () => startRegistro(store.method));
-
-  registroForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-
-    const method = store.method;
-    if (!method) return;
-
-    const amt = Number(String(monto.value || "").replace(/[^\d.]/g, ""));
-    if (!amt || amt <= 0) {
-      alert("Monto inválido.");
-      return;
-    }
-
-    const draft = {
-      method,
-      name: String(nombre.value || "").trim(),
-      phone: String(telefono.value || "").trim(),
-      note: String(nota.value || "").trim(),
-      amount: amt
-    };
-
-    startCobro(draft);
-  });
-
-  // Abrir link (oculto)
-  openLinkBtn.addEventListener("click", () => {
-    if (!store.lastLink) return;
-    window.open(store.lastLink, "_blank", "noopener,noreferrer");
-  });
-
-  // Enviar link (share sheet si existe)
-  shareLinkBtn.addEventListener("click", async () => {
-    if (!store.lastLink) return;
-
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: "Link de pago",
-          text: "Aquí tienes el link de pago:",
-          url: store.lastLink
-        });
-        return;
-      }
-    } catch (_) {}
-
-    // fallback: copiar
-    try {
-      await navigator.clipboard.writeText(store.lastLink);
-      alert("Link copiado.");
-    } catch {
-      prompt("Copia el link:", store.lastLink);
-    }
-  });
-
-  // Pago completado -> guardar + generar recibo
-  pagadoBtn.addEventListener("click", async () => {
-    if (!store.draft) return;
-
-    const receiptId = nowStamp();
-    const record = {
-      receiptId,
-      createdAt: new Date().toISOString(),
-      method: store.draft.method,
-      name: store.draft.name,
-      phone: store.draft.phone,
-      note: store.draft.note,
-      amount: Number(store.draft.amount || 0),
-      status: "PAGADO",
-      payLink: methodIsLink(store.draft.method) ? (PAYMENT_LINKS[store.draft.method] || "") : ""
-    };
-
-    await saveReceipt(record);
-
-    // PDF
-    const pdf = await buildReceiptPDF(record);
-    await shareOrOpenPDF(pdf, `Recibo-${receiptId}.pdf`);
-
-    // volver al inicio
-    backToMethods();
-  });
-
-  // Modal
-  openHistoryBtn.addEventListener("click", openModal);
-  closeModalBtn.addEventListener("click", closeModal);
-  refreshBtn.addEventListener("click", refreshHistory);
-  syncBtn.addEventListener("click", syncGoogle);
-  clearCacheBtn.addEventListener("click", clearLocalCache);
-  changePinBtn.addEventListener("click", changePinFlow);
-
-  // PIN events
-  pinEnterBtn.addEventListener("click", checkPin);
-  pinInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") checkPin();
-  });
-
-  pinResetBtn.addEventListener("click", () => {
-    const ok = confirm("Reset PIN a 1234?");
-    if (!ok) return;
-    setPin("1234");
-    alert("PIN reseteado.");
-  });
-
-  // ========== INIT ==========
-  initFirebase();
-  setHeader("Select Payment Method", "Selecciona el método. Luego registras el cliente y cobras.");
-  show(viewMethods);
-  requirePin();
-})();
+// ===== Pago completado =====
+btnPaid.onclick = async ()=>{
+  try{
+    const m=state.method, f=state.form;
+    const payment = {
+      receiptNo: receiptNo(),
+      dateISO: new Date().toISOString(),
+      dateText: new Date().toLocaleString("es-PR"),
+      customerName: f.name,
