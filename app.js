@@ -1,9 +1,10 @@
 /********************************************************
- Nexus POS — Payment Platform (Clean Build)
+ Nexus POS — Payment Platform (Clean Build) — UPDATED
  - Email/Password Auth (UID único por usuario)
  - Firestore: users/{uid}/payments
  - Métodos: Stripe/ATH (QR) + Tap/Cash/Checks + Links Stripe/Ath
  - Recibo: jsPDF + Share Sheet
+ - PayLink: COMPARTIR (no abrir) + copiar fallback
 *********************************************************/
 
 console.log("app.js ✅", new Date().toISOString());
@@ -220,25 +221,48 @@ function renderPayScreen(){
     payHint.textContent = "El cliente escanea el QR. Luego marca “Pago completado (manual)”.";
   }
 
-  // PayLink (NO mostramos URL feo)
+  // PayLink (PRO): botón principal = COMPARTIR (no abrir)
   if(m.mode==="paylink"){
     const link = m.link();
+
     payArea.innerHTML = `
       <div class="linkBox">
         <div class="linkTitle">Link de pago</div>
-        <div class="linkMeta">Abre el enlace para cobrar. (El URL se mantiene oculto para que se vea pro.)</div>
+        <div class="linkMeta">Envíalo al cliente por Mensajes/WhatsApp. (El URL se mantiene oculto para que se vea pro.)</div>
         <div class="btnRow">
-          <button class="btn btnPrimary" type="button" id="btnOpenPayLink">Abrir link</button>
-          <button class="btn btnGhost" type="button" id="btnCopyPayLink">Copiar link</button>
+          <button class="btn btnPrimary" type="button" id="btnSharePayLink">Compartir link</button>
+          <button class="btn btnGhost" type="button" id="btnCopyPayLink">Copiar</button>
         </div>
       </div>
     `;
-    document.getElementById("btnOpenPayLink").onclick = ()=> window.open(link, "_blank");
-    document.getElementById("btnCopyPayLink").onclick = async ()=>{
-      try{ await navigator.clipboard.writeText(link); payHint.textContent="Link copiado ✅"; }
-      catch{ payHint.textContent="No pude copiar. Mantén presionado y copia desde el navegador."; }
+
+    document.getElementById("btnSharePayLink").onclick = async ()=>{
+      try{
+        const msg = `Pago $${money(f.amount)} — ${m.label}\nCliente: ${f.name || "N/A"}`;
+
+        if(navigator.share){
+          await navigator.share({ title:"Link de pago", text: msg, url: link });
+          payHint.textContent="Link compartido ✅";
+        }else{
+          await navigator.clipboard.writeText(link);
+          payHint.textContent="Link copiado ✅";
+        }
+      }catch(e){
+        console.warn("Share cancelado/falló:", e);
+        payHint.textContent="Compartir cancelado.";
+      }
     };
-    payHint.textContent = "Abre el link y confirma manual cuando esté pago.";
+
+    document.getElementById("btnCopyPayLink").onclick = async ()=>{
+      try{
+        await navigator.clipboard.writeText(link);
+        payHint.textContent="Link copiado ✅";
+      }catch{
+        payHint.textContent="No pude copiar aquí. Abre en Safari y copia.";
+      }
+    };
+
+    payHint.textContent = "Comparte el link y confirma manual cuando esté pago.";
   }
 
   // Link normal (Tap to Pay)
@@ -456,7 +480,6 @@ auth.onAuthStateChanged((user)=>{
     go(screenMethods);
   }else{
     authModal.classList.remove("hidden");
-    // evita que se quede “vacío”
     go(screenMethods);
   }
 });
